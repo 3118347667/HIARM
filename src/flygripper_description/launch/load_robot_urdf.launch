@@ -1,0 +1,49 @@
+<launch>
+    <!-- common parameters -->
+    <arg name="mav_name"  default="flygripper"/>
+    <arg name="namespace" default="$(arg mav_name)"/>
+
+    <arg name="tf_prefix" default="$(arg namespace)"/>
+    <arg name="model"     default="$(find flygripper_description)/urdf/$(arg mav_name).xacro"/>
+
+    <!-- simulation parameters -->
+    <arg name="use_sim" default="true"/>
+    <arg name="x" default="0.0"/>
+    <arg name="y" default="0.0"/>
+    <arg name="z" default="0.0"/>
+
+    <group ns="$(arg namespace)">
+        <!-- send the robot XML to param server
+             with args of namespace and use_sim used in robot model name -->
+        <param name="robot_description"
+               command="$(find xacro)/xacro '$(arg model)' namespace:=$(arg namespace) use_sim:=$(arg use_sim)"/>
+
+        <group if="$(arg use_sim)">
+            <!-- push robot_description to factory and spawn robot in gazebo -->
+            <node name="spawn_$(arg mav_name)" pkg="gazebo_ros" type="spawn_model" clear_params="true"
+                  args="-param robot_description
+             -urdf
+             -x $(arg x)
+             -y $(arg y)
+             -z $(arg z)
+             -model $(arg namespace)" respawn="false" output="screen"/>
+
+            <!-- multi-robot tf issue: gazebo fixed world link issue for multi-robot TODO: remove -->
+<!--             <node pkg="tf" -->
+<!--                   type="static_transform_publisher" -->
+<!--                   name="static_transform_publisher" -->
+<!--                   args="$(arg x) $(arg y) $(arg z) 0 0 0 world $(arg tf_prefix)/odom 100" /> -->
+
+        </group>
+
+        <!-- multi-robot tf issue: tf_prefix for robot state publisher(fixed version) -->
+        <!-- TODO: use prefix in urdf define instead of tf_prefix -->
+        <param name="tf_prefix" type="string" value="$(arg tf_prefix)"/>
+
+        <!-- robot_state_publisher: subscribe the joint_states and publish tf -->
+<!--         <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher"/> -->
+
+    </group>
+
+
+</launch>

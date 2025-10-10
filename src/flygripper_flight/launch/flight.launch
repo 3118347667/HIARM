@@ -1,0 +1,40 @@
+<launch>
+    <!-- common parameters -->
+    <arg name="mav_name"    default="flygripper"/>
+    <arg name="namespace"   default="$(arg mav_name)"/>
+    <arg name="use_sim"     default="true"/>
+
+    <group ns="$(arg namespace)">
+        <rosparam command="load" file="$(find flygripper_flight)/params/$(arg mav_name).yaml" unless="$(arg use_sim)"/>
+        <rosparam command="load" file="$(find flygripper_flight)/params/$(arg mav_name)_sim.yaml" if="$(arg use_sim)"/>
+
+        <rosparam command="load" file="$(find flygripper_controller)/params/$(arg mav_name).yaml" unless="$(arg use_sim)"/>
+        <rosparam command="load" file="$(find flygripper_controller)/params/$(arg mav_name)_sim.yaml" if="$(arg use_sim)"/>
+
+        <node pkg="flygripper_flight" type="flygripper_flight_node" name="flygripper_flight_node" output="screen">
+            <rosparam command="load" file="$(find flygripper_flight)/params/fsm.yaml" unless="$(arg use_sim)"/>
+            <rosparam command="load" file="$(find flygripper_flight)/params/fsm_sim.yaml" if="$(arg use_sim)"/>
+            <remap from="trigger" to="/move_base_simple/goal"/>
+            <!-- input -->
+            <!--        <remap from="/mavros/rc/in" to=""/>-->
+            <!--        <remap from="/mavros/state" to=""/>-->
+            <remap from="imu" to="/mavros/imu/data" unless="$(arg use_sim)"/>
+            <remap from="odom" to="/ekf/ekf_odom" unless="$(arg use_sim)"/>
+            <remap from="rotor_speed" to="/mavros/esc_telemetry" unless="$(arg use_sim)"/>
+            <!--        <remap from="actuator_state" to="" /> -->
+            <!--        <remap from="trajectory" to=""/>-->
+
+            <!-- output -->
+            <!--        <remap from="robot_state" to=""/>-->
+            <!--        <remap from="reference" to=""/> -->
+            <!--        <remap from="trigger" to=""/> -->
+            <!--        <remap from="/mavros/set_mode" to=""/> -->
+            <remap from="rotor_command" to="/mavros/actuator_control" unless="$(arg use_sim)"/>
+            <!--        <remap from="actuator_command" to=""/>-->
+            <!--        <remap from="geometric_controller/data" to=""/> -->
+            <!--        <remap from="external_wrench_indi" to=""/> -->
+            <!--        <remap from="external_wrench_l1" to=""/> -->
+        </node>
+    </group>
+
+</launch>

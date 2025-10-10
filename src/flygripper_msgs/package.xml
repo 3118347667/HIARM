@@ -1,0 +1,22 @@
+<package format = "2">
+    <name>flygripper_msgs</name>
+    <version>2.0.0</version>
+    <description>
+        The flygripper_msgs package provides all the messages
+    </description>
+    <author>flygripperYoung</author>
+    <maintainer email="flygripper0young@gmail.com">flygripperYoung</maintainer>
+    <license>GPL 3.0</license>
+
+    <buildtool_depend>catkin</buildtool_depend>
+
+    <depend>std_msgs</depend>
+    <depend>geometry_msgs</depend>
+    <depend>nav_msgs</depend>
+
+    <exec_depend>message_runtime</exec_depend>
+
+    <export>
+    </export>
+
+</package>

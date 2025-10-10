@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<launch>
+    <arg name="mav_name"  default="flygripper"/>
+        <arg name="namespace" default="$(arg mav_name)"/>
+        <arg name="joy_dev" default="/dev/input/js0"/>
+        <arg name="joy_ff_dev" default="/dev/input/event13"/>
+
+        <group ns="$(arg namespace)">
+            <node pkg="joy" type="joy_node" name="joy_node" output="screen">
+                <param name="dev" value="$(arg joy_dev)"/>
+                <param name="deadzone" value="0.02"/>
+                <param name="autorepeat_rate" value="100"/>
+                <param name="dev_ff" value="$(arg joy_ff_dev)"/>
+            </node>
+            <node pkg="fake_mavros" type="mavros_node" name="mavros_node" output="screen">
+                <param name="morph_teleop" value="false"/>
+            </node>
+        </group>
+
+
+</launch>

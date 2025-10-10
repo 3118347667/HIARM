@@ -1,0 +1,268 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="$(arg namespace)">
+    <!-- Include common files -->
+    <xacro:include filename="$(find flygripper_description)/urdf/common.xacro" />
+    <xacro:include filename="$(find flygripper_description)/urdf/materials.xacro" />
+
+    <!-- Constants for robot dimensions -->
+    <xacro:property name="namespace" value="$(arg namespace)" />
+    <xacro:property name="use_sim" value="$(arg use_sim)" />
+
+    <!-- Body Link -->
+    <xacro:property name="body_mass" value="0.68"/> <!-- kg -->
+    <xacro:property name="body_inertia">
+        <inertia ixx="0.007" ixy="0.0" ixz="0.0" iyy="0.007" iyz="0.0" izz="0.012" /> <!-- [kg m^2] [kg m^2] [kg m^2] [kg m^2] [kg m^2] [kg m^2] -->
+    </xacro:property>
+    <xacro:property name="body_mesh_file" value="package://flygripper_description/models/hummingbird.dae" />
+    <xacro:property name="body_width" value="0.1" /> <!-- [m] -->
+    <xacro:property name="body_height" value="0.12" /> <!-- [m] -->
+    <xacro:property name="arm_length" value="0.17" /> <!-- [m] -->
+
+    <!-- 4 Rotor Link -->
+    <xacro:property name="rotor_mass" value="0.009"/> <!-- kg -->
+    <xacro:property name="rotor_radius" value="0.1"/> <!-- m -->
+    <xacro:property name="rotor_width" value="0.015"/> <!-- m -->
+    <xacro:property name="rotor_height" value="0.003"/> <!-- m -->
+    <xacro:property name="rotor_inertia">
+        <xacro:box_inertia x="${rotor_radius}" y="${rotor_width}" z="${rotor_height}" mass="${rotor_mass}" />
+    </xacro:property>
+    <xacro:property name="rotor_inertial">
+        <inertial>
+            <mass value="${rotor_mass}" /> <!-- [kg] -->
+            <xacro:insert_block name="rotor_inertia" />
+        </inertial>
+    </xacro:property>
+    <xacro:property name="propeller_cw_mesh_file"  value="package://flygripper_description/models/propeller_cw.dae" />
+    <xacro:property name="propeller_ccw_mesh_file" value="package://flygripper_description/models/propeller_ccw.dae" />
+    <xacro:property name="rotor_cw_visual">
+        <visual>
+            <geometry>
+                <mesh filename="${propeller_cw_mesh_file}"
+                      scale="${rotor_radius} ${rotor_radius} ${rotor_radius}" /> <!-- The propeller meshes have a radius of 1m -->
+            </geometry>
+            <material name="blue"/>
+        </visual>
+    </xacro:property>
+    <xacro:property name="rotor_ccw_visual">
+        <visual>
+            <geometry>
+                <mesh filename="${propeller_ccw_mesh_file}"
+                      scale="${rotor_radius} ${rotor_radius} ${rotor_radius}" /> <!-- The propeller meshes have a radius of 1m -->
+            </geometry>
+            <material name="red"/>
+        </visual>
+    </xacro:property>
+    <xacro:property name="rotor_collision">
+        <collision>
+            <geometry>
+                <cylinder length="0.005" radius="${rotor_radius}" /> <!-- [m] -->
+            </geometry>
+        </collision>
+    </xacro:property>
+    <!-- rotor joint -->
+    <xacro:property name="rotor_offset_top" value="0.01" /> <!-- m -->
+    <xacro:property name="rotor_position" value="${arm_length/1.4142}" /> <!-- [m] -->
+
+
+    <!-- Virtual dummy root link -->
+    <link name="odom"/>
+    <joint name="fixed" type="fixed">
+        <parent link="odom"/>
+        <child link="base_link"/>
+    </joint>
+
+    <!-- Body frame -->
+    <link name="base_link"></link>
+
+    <joint name="base_joint" type="fixed">
+        <origin xyz="0 0 0" rpy="0 0 0" />
+        <parent link="base_link" />
+        <child link="base_link_inertia" />
+    </joint>
+
+    <link name="base_link_inertia">
+        <inertial>
+            <mass value="${body_mass}" />  <!-- [kg] -->
+            <origin xyz="0 0 0" />
+            <xacro:insert_block name="body_inertia" />
+        </inertial>
+        <visual>
+            <origin xyz="0 0 0" rpy="0 0 -0.785398" />
+            <geometry>
+                <mesh filename="${body_mesh_file}" scale="1 1 1" />
+            </geometry>
+            <material name="black"/>
+        </visual>
+        <collision>
+            <origin xyz="0 0 0" rpy="0 0 0" />
+            <geometry>
+                <box size="${body_width} ${body_width} ${body_height}" /> <!-- [m] [m] [m] -->
+            </geometry>
+        </collision>
+    </link>
+    <!-- Right up rotor -->
+    <joint name="right_up_rotor_joint" type="continuous">
+        <origin xyz="${rotor_position} -${rotor_position} ${rotor_offset_top}" rpy="0 0 0"/>
+        <axis xyz="0 0 1" />
+        <parent link="base_link" />
+        <child link="right_up_rotor_link" />
+    </joint>
+    <link name="right_up_rotor_link">
+        <xacro:insert_block name="rotor_inertial" />
+        <xacro:insert_block name="rotor_ccw_visual" />
+        <xacro:insert_block name="rotor_collision" />
+    </link>
+    <!-- Left down rotor -->
+    <joint name="left_down_rotor_joint" type="continuous">
+        <origin xyz="-${rotor_position} ${rotor_position} ${rotor_offset_top}" rpy="0 0 0"/>
+        <axis xyz="0 0 1" />
+        <parent link="base_link" />
+        <child link="left_down_rotor_link" />
+    </joint>
+    <link name="left_down_rotor_link">
+        <xacro:insert_block name="rotor_inertial" />
+        <xacro:insert_block name="rotor_ccw_visual" />
+        <xacro:insert_block name="rotor_collision" />
+    </link>
+    <!-- Left up rotor -->
+    <joint name="left_up_rotor_joint" type="continuous">
+        <origin xyz="${rotor_position} ${rotor_position} ${rotor_offset_top}" rpy="0 0 0"/>
+        <axis xyz="0 0 1" />
+        <parent link="base_link" />
+        <child link="left_up_rotor_link" />
+    </joint>
+    <link name="left_up_rotor_link">
+        <xacro:insert_block name="rotor_inertial" />
+        <xacro:insert_block name="rotor_cw_visual" />
+        <xacro:insert_block name="rotor_collision" />
+    </link>
+    <!-- Right down rotor -->
+    <joint name="right_down_rotor_joint" type="continuous">
+        <origin xyz="-${rotor_position} -${rotor_position} ${rotor_offset_top}" rpy="0 0 0"/>
+        <axis xyz="0 0 1" />
+        <parent link="base_link" />
+        <child link="right_down_rotor_link" />
+    </joint>
+    <link name="right_down_rotor_link">
+        <xacro:insert_block name="rotor_inertial" />
+        <xacro:insert_block name="rotor_cw_visual" />
+        <xacro:insert_block name="rotor_collision" />
+    </link>
+
+    <!-- IMU and Odom -->
+    <joint name="odom_joint" type="revolute">
+        <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0" />
+        <parent link="base_link"/>
+        <child link="odom_link"/>
+        <limit upper="0" lower="0" effort="0" velocity="0" />
+    </joint>
+    <link name="odom_link">
+        <inertial>
+            <inertia ixx="0.00001" ixy="0.0" ixz="0.0" iyy="0.00001" iyz="0.0" izz="0.00001" /> <!-- [kg m^2] [kg m^2] [kg m^2] [kg m^2] [kg m^2] [kg m^2] -->
+            <mass value="0.00001"/> <!-- kg -->
+            <origin xyz="0 0 0" rpy="0 0 0" />
+        </inertial>
+    </link>
+    <joint name="imu_joint" type="revolute">
+        <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0" />
+        <parent link="base_link"/>
+        <child link="imu_link"/>
+        <limit upper="0" lower="0" effort="0" velocity="0" />
+    </joint>
+    <link name="imu_link">
+        <inertial>
+            <inertia ixx="0.00001" ixy="0.0" ixz="0.0" iyy="0.00001" iyz="0.0" izz="0.00001" /> <!-- [kg m^2] [kg m^2] [kg m^2] [kg m^2] [kg m^2] [kg m^2] -->
+            <mass value="0.00001"/> <!-- kg -->
+            <origin xyz="0 0 0" rpy="0 0 0" />
+        </inertial>
+    </link>
+
+    <xacro:if value="${use_sim}">
+        <gazebo>
+            <plugin name="${namespace}_rotor_plugin" filename="libgazebo_rotor_plugin.so">
+                <robotNamespace>${namespace}</robotNamespace>
+                <rotor id="0">
+                    <jointName>right_up_rotor_joint</jointName>
+                    <linkName>right_up_rotor_link</linkName>
+                    <turningDirection>ccw</turningDirection>
+                </rotor>
+                <rotor id="1">
+                    <jointName>left_down_rotor_joint</jointName>
+                    <linkName>left_down_rotor_link</linkName>
+                    <turningDirection>ccw</turningDirection>
+                </rotor>
+                <rotor id="2">
+                    <jointName>left_up_rotor_joint</jointName>
+                    <linkName>left_up_rotor_link</linkName>
+                    <turningDirection>cw</turningDirection>
+                </rotor>
+                <rotor id="3">
+                    <jointName>right_down_rotor_joint</jointName>
+                    <linkName>right_down_rotor_link</linkName>
+                    <turningDirection>cw</turningDirection>
+                </rotor>
+                <motorConstant>9.374e-08</motorConstant>
+                <momentConstant>1.500e-09</momentConstant>
+                <rotorDragCoefficient>0.0</rotorDragCoefficient> <!-- 8.06428e-05 -->
+                <rollingMomentCoefficient>0.0</rollingMomentCoefficient> <!-- 0.000001 -->
+                <maxRotVelocity>10000</maxRotVelocity> <!-- 3002 -->
+                <timeConstantUp>0.0125</timeConstantUp> <!-- 0.0125 -->
+                <timeConstantDown>0.025</timeConstantDown> <!-- 0.025 -->
+                <dshotRpmMappingCoefficient>4.389e-02 -5.255e-05 1.573e-08</dshotRpmMappingCoefficient>
+                <rotorVelocitySlowdownSim>30</rotorVelocitySlowdownSim>
+                <rosCommandTopicName>rotor_command</rosCommandTopicName>
+                <rosFeedbackTopicName>rotor_speed</rosFeedbackTopicName>
+            </plugin>
+
+            <plugin name="${namespace}_odometry_plugin" filename="libgazebo_odometry_plugin.so">
+                <robotNamespace>${namespace}</robotNamespace>
+                <linkName>odom_link</linkName>
+                <randomEngineSeed>0</randomEngineSeed>
+                <noiseNormalPosition>0.0 0.0 0.0</noiseNormalPosition>
+                <noiseNormalQuaternion>0.0 0.0 0.0</noiseNormalQuaternion>
+                <noiseNormalLinearVelocity>0.0 0.0 0.0</noiseNormalLinearVelocity>
+                <noiseNormalAngularVelocity>0.0 0.0 0.0</noiseNormalAngularVelocity>
+                <rosOdomTopicName>odom</rosOdomTopicName>
+                <frameId>world</frameId>
+                <childFrameId>${namespace}</childFrameId> <!-- xjb 没啥用 不发 tf-->
+                <publishFrequency>333</publishFrequency> <!-- 333 -->
+                <measurementDelay>0.0</measurementDelay> <!-- 0.02 -->
+            </plugin>
+
+            <plugin name="${namespace}_imu_plugin" filename="libgazebo_imu_plugin.so">
+                <robotNamespace>${namespace}</robotNamespace>
+                <linkName>imu_link</linkName>
+                <frameId>${namespace}</frameId> <!-- xjb 没啥用 不发 tf -->
+                <randomEngineSeed>0</randomEngineSeed>
+                <gyroscopeNoiseDensity>0.0003394</gyroscopeNoiseDensity>
+                <gyroscopeBiasRandomWalk>0.000038785</gyroscopeBiasRandomWalk>
+                <gyroscopeBiasCorrelationTime>1000.0</gyroscopeBiasCorrelationTime>
+                <gyroscopeTurnOnBiasSigma>0.0087</gyroscopeTurnOnBiasSigma>
+                <accelerometerNoiseDensity>0.004</accelerometerNoiseDensity>
+                <accelerometerRandomWalk>0.006</accelerometerRandomWalk>
+                <accelerometerBiasCorrelationTime>300.0</accelerometerBiasCorrelationTime>
+                <accelerometerTurnOnBiasSigma>0.1960</accelerometerTurnOnBiasSigma>
+                <!--                <gyroscopeNoiseDensity>0.0</gyroscopeNoiseDensity>-->
+                <!--                <gyroscopeBiasRandomWalk>0.0</gyroscopeBiasRandomWalk>-->
+                <!--                <gyroscopeBiasCorrelationTime>0.0</gyroscopeBiasCorrelationTime>-->
+                <!--                <gyroscopeTurnOnBiasSigma>0.0</gyroscopeTurnOnBiasSigma>-->
+                <!--                <accelerometerNoiseDensity>0.0</accelerometerNoiseDensity>-->
+                <!--                <accelerometerRandomWalk>0.0</accelerometerRandomWalk>-->
+                <!--                <accelerometerBiasCorrelationTime>0.0</accelerometerBiasCorrelationTime>-->
+                <!--                <accelerometerTurnOnBiasSigma>0.0</accelerometerTurnOnBiasSigma>-->
+                <rosImuTopicName>imu</rosImuTopicName>
+                <publishFrequency>333</publishFrequency> <!-- 333 -->
+            </plugin>
+
+            <plugin name="${namespace}_interactive_plugin" filename="libgazebo_interactive_plugin.so">
+                <robotNamespace>${namespace}</robotNamespace>
+                <linkName>odom_link</linkName>
+                <relativeForce>false</relativeForce>
+                <relativeTorque>true</relativeTorque>
+                <rosCommandTopicName>applied_wrench</rosCommandTopicName>
+                <commandTimeout>1.0</commandTimeout>
+            </plugin>
+        </gazebo>
+
+    </xacro:if>
+</robot>

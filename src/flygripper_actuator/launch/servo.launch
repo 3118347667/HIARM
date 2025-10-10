@@ -1,0 +1,18 @@
+<launch>
+    <!-- common parameters -->
+    <arg name="mav_name"  default="flygripper"/>
+    <arg name="namespace" default="$(arg mav_name)"/>
+
+    <arg name="actuator_bus" default="uart"/> <!--uart -->
+    <arg name="actuator_interface" default="/dev/ttyUSB0"/> <!-- /dev/FEETECH_SERVO -->
+
+    <!-- need sudo privilege -->
+    <group ns="$(arg namespace)">
+        <node pkg="flygripper_actuator" type="servo_node" name="servo_node" output="screen">
+            <rosparam command="load" file="$(find flygripper_actuator)/params/servo_control.yaml"/>
+            <rosparam command="load" file="$(find flygripper_actuator)/params/servo.yaml"/>
+            <param name="actuator_bus" value="$(arg actuator_bus)"/>
+            <param name="actuator_interface" value="$(arg actuator_interface)"/>
+        </node>
+    </group>
+</launch>

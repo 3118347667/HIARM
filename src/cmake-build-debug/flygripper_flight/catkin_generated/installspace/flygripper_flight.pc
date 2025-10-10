@@ -1,0 +1,8 @@
+prefix=/usr/local
+
+Name: flygripper_flight
+Description: Description of flygripper_flight
+Version: 0.0.0
+Cflags: -I${prefix}/include
+Libs: -L${prefix}/lib 
+Requires: 

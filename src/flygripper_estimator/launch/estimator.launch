@@ -1,0 +1,22 @@
+<launch>
+    <!-- common parameters -->
+    <arg name="mav_name"  default="flygripper"/>
+    <arg name="namespace" default="$(arg mav_name)"/>
+    <arg name="use_sim"   default="true"/>
+
+    <group ns="$(arg namespace)">
+        <!-- TODO: robot_state_publisher: subscribe the joint_states and publish tf -->
+        <node name="flygripper_estimator_node" pkg="flygripper_estimator" type="flygripper_estimator_node" output="screen">
+            <!-- input -->
+            <remap from="imu" to="/mavros/imu/data_raw" unless="$(arg use_sim)"/>
+            <remap from="odom" to="/ekf/ekf_odom" unless="$(arg use_sim)"/>
+            <remap from="rotor_speed" to="/mavros/esc_telemetry" unless="$(arg use_sim)"/>
+<!--             <remap from="actuator_state" to="..." /> -->
+            <!-- output -->
+<!--             <remap from="robot_state" to="..." /> -->
+<!--             <remap from="center_odom" to="..." /> -->
+            <rosparam command="load" file="$(find flygripper_estimator)/params/estimator.yaml"/>
+        </node>
+    </group>
+
+</launch>

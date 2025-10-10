@@ -1,0 +1,8 @@
+prefix=/usr/local
+
+Name: flygripper_gazebo_plugins
+Description: Description of flygripper_gazebo_plugins
+Version: 0.0.0
+Cflags: -I${prefix}/include
+Libs: -L${prefix}/lib -lgazebo_rotor_plugin -lgazebo_template_plugin -lgazebo_odometry_plugin -lgazebo_imu_plugin -lgazebo_reconfigurable_plugin -lgazebo_grasp_plugin -lgazebo_interactive_plugin
+Requires: roscpp tf gazebo_ros nav_msgs sensor_msgs flygripper_msgs mavros_msgs flygripper_common

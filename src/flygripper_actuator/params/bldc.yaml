@@ -1,0 +1,27 @@
+# actuator settings
+
+# defined in the launch arguments with root
+#actuator_bus: uart_can
+#actuator_interface: /dev/CAN_MOTOR
+
+#actuator_bus: socket_can
+#actuator_interface: can0
+
+# TODO: make it vector to support multiple actuators
+# BLDC Actuator support
+actuator_id: 0x201
+actuator_product: rm2006
+actuator_joint_name: actuator_joint
+
+enable_joint_state_publisher: false
+
+actuators:
+  rm2006:
+    act2pos: 2.13078897e-5   # 2*PI/8192*(1/36)
+    act2vel: 0.0029088820    # 2*PI/60*(1/36)
+    act2effort: 0.00018      # 10/10000*0.18
+    effort2act: 5555.5555555 # 1/act2effort
+    max_out: 10000           # = 1 N*M
+    offset_angle: 0
+    lpf_cutoff_freq: 100     # Hz
+    lpf_sampling_freq: 1000  # Hz

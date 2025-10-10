@@ -1,0 +1,8 @@
+prefix=/usr/local
+
+Name: flygripper_teleop
+Description: Description of flygripper_teleop
+Version: 0.0.0
+Cflags: -I${prefix}/include
+Libs: -L${prefix}/lib 
+Requires: 

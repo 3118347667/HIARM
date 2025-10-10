@@ -1,0 +1,339 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="$(arg namespace)">
+    <!-- Include common files -->
+    <xacro:include filename="$(find flygripper_description)/urdf/common.xacro" />
+    <xacro:include filename="$(find flygripper_description)/urdf/materials.xacro" />
+
+    <!-- Constants for robot dimensions -->
+    <xacro:property name="namespace" value="$(arg namespace)" />
+    <xacro:property name="use_sim" value="$(arg use_sim)" />
+
+    <!-- Link 1 -->
+    <xacro:property name="link1_mass" value="0.5"/>
+    <xacro:property name="link1_width" value="0.1"/>
+    <xacro:property name="link1_height" value="1"/>
+    <xacro:property name="link1_origin">
+        <origin xyz="0 0 ${link1_height/2}" rpy="0 0 0"/>
+    </xacro:property>
+    <xacro:property name="link1_geometry">
+        <geometry>
+            <box size="${link1_width} ${link1_width} ${link1_height}"/>
+        </geometry>
+    </xacro:property>
+    <xacro:property name="link1_inertia">
+        <xacro:box_inertia x="${link1_width}" y="${link1_width}" z="${link1_height}" mass="${link1_mass}" />
+    </xacro:property>
+
+    <xacro:property name="axel_offset" value="${link1_width/2}"/> <!-- Space btw top of beam and the each joint -->
+    <!-- Joint 1 -->
+    <xacro:property name="joint1_origin">
+        <origin xyz="0 ${link1_width} ${link1_height - axel_offset}" rpy="0 1.57 0"/>
+    </xacro:property>
+
+    <!-- Link 2 -->
+    <xacro:property name="link2_mass" value="0.05"/>
+    <xacro:property name="link2_width" value="0.1"/>
+    <xacro:property name="link2_height" value="0.2"/>
+    <xacro:property name="link2_origin">
+        <origin xyz="0 0 ${link2_height/2 - axel_offset}" rpy="0 0 0"/>
+    </xacro:property>
+    <xacro:property name="link2_geometry">
+        <geometry>
+            <box size="${link2_width} ${link2_width} ${link2_height}"/>
+        </geometry>
+    </xacro:property>
+    <xacro:property name="link2_inertia">
+        <xacro:box_inertia x="${link2_width}" y="${link2_width}" z="${link2_height}" mass="${link2_mass}" />
+    </xacro:property>
+
+    <!-- Rotor Joint -->
+    <xacro:property name="rotor_joint_origin">
+        <origin xyz="-${link2_width} 0 ${link2_height - 2*axel_offset}" rpy="0 0 0"/>
+    </xacro:property>
+
+    <!-- Rotor Link -->
+    <xacro:property name="rotor_mass" value="0.1"/>
+    <xacro:property name="rotor_width" value="0.01"/>
+    <xacro:property name="rotor_height" value="0.1"/>
+    <xacro:property name="rotor_origin">
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+    </xacro:property>
+    <xacro:property name="rotor_geometry">
+        <geometry>
+            <box size="${rotor_width} ${rotor_width} ${rotor_height}"/>
+        </geometry>
+    </xacro:property>
+    <xacro:property name="rotor_inertia">
+        <xacro:box_inertia x="${rotor_width}" y="${rotor_width}" z="${rotor_height}" mass="${rotor_mass}" />
+    </xacro:property>
+
+    <!-- Odom Sensor Joint -->
+    <xacro:property name="odom_joint_origin">
+        <origin xyz="0 0 ${link2_height-axel_offset+odom_height/2}" rpy="0 0 0"/>
+    </xacro:property>
+
+    <!-- Odom Sensor Link -->
+    <xacro:property name="odom_mass" value="0.01"/>
+    <xacro:property name="odom_width" value="0.05"/>
+    <xacro:property name="odom_height" value="0.05"/>
+    <xacro:property name="odom_origin">
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+    </xacro:property>
+    <xacro:property name="odom_geometry">
+        <geometry>
+            <box size="${odom_width} ${odom_width} ${odom_height}"/>
+        </geometry>
+    </xacro:property>
+    <xacro:property name="odom_inertia">
+        <xacro:box_inertia x="${odom_width}" y="${odom_width}" z="${odom_height}" mass="${odom_mass}" />
+    </xacro:property>
+
+    <!--Used for fixing robot to Gazebo 'base_link' -->
+    <link name="world"/>
+    <joint name="fixed" type="fixed">
+        <parent link="world"/>
+        <child link="link1"/>
+    </joint>
+
+    <link name="link1">
+        <collision>
+            <xacro:insert_block name="link1_origin" />
+            <xacro:insert_block name="link1_geometry" />
+        </collision>
+        <visual>
+            <xacro:insert_block name="link1_origin" />
+            <xacro:insert_block name="link1_geometry" />
+            <material name="orange"/>
+        </visual>
+        <inertial>
+            <xacro:insert_block name="link1_origin" />
+            <mass value="${link1_mass}"/>
+            <xacro:insert_block name="link1_inertia" />
+        </inertial>
+    </link>
+
+    <joint name="joint1" type="prismatic">
+        <axis xyz="0 1 0"/>
+        <xacro:insert_block name="joint1_origin" />
+        <!--      limit not work while type="continuous"-->
+        <limit effort="1.8" velocity="50." lower="-1" upper="1"/>
+        <dynamics damping="0.1" friction="0.01"
+                  spring_stiffness="1.0" spring_reference="0.0"/>
+        <parent link="link1"/>
+        <child link="link2"/>
+        <physics>
+            <ode>
+                <implicit_spring_damper>1</implicit_spring_damper>
+            </ode>
+        </physics>
+    </joint>
+
+    <link name="link2">
+        <collision>
+            <xacro:insert_block name="link2_origin" />
+            <xacro:insert_block name="link2_geometry" />
+        </collision>
+        <visual>
+            <xacro:insert_block name="link2_origin" />
+            <xacro:insert_block name="link2_geometry" />
+            <material name="black"/>
+        </visual>
+        <inertial>
+            <xacro:insert_block name="link2_origin" />
+            <xacro:insert_block name="link2_inertia" />
+            <mass value="${link2_mass}"/>
+        </inertial>
+    </link>
+
+    <joint name="mimic_joint" type="prismatic">
+        <axis xyz="1 0 0"/>
+        <xacro:insert_block name="joint1_origin" />
+        <!--      limit not work while type="continuous"-->
+        <limit effort="1.8" velocity="50." lower="-1" upper="1"/>
+        <dynamics damping="0.1" friction="0.01"  spring_stiffness="10000.0" spring_reference="0.0"/>
+        <parent link="link2"/>
+        <child link="link3"/>
+        <mimic joint="joint1" multiplier="1" offset="0"/>
+        <physics>
+            <ode>
+                <implicit_spring_damper>1</implicit_spring_damper>
+            </ode>
+        </physics>
+    </joint>
+
+    <link name="link3">
+        <collision>
+            <xacro:insert_block name="link2_origin" />
+            <xacro:insert_block name="link2_geometry" />
+        </collision>
+        <visual>
+            <xacro:insert_block name="link2_origin" />
+            <xacro:insert_block name="link2_geometry" />
+            <material name="black"/>
+        </visual>
+        <inertial>
+            <xacro:insert_block name="link2_origin" />
+            <xacro:insert_block name="link2_inertia" />
+            <mass value="${link2_mass}"/>
+        </inertial>
+    </link>
+
+    <joint name="rotor_joint" type="continuous">
+        <axis xyz="1 0 0"/>
+        <xacro:insert_block name="rotor_joint_origin" />
+        <!--      limit not work while type="continuous"-->
+        <limit effort="1.8" velocity="50."/>
+        <dynamics damping="0.05" friction="0.01"/>
+        <parent link="link2"/>
+        <child link="rotor_link"/>
+    </joint>
+
+    <link name="rotor_link">
+        <collision>
+            <xacro:insert_block name="rotor_origin" />
+            <xacro:insert_block name="rotor_geometry" />
+        </collision>
+        <visual>
+            <xacro:insert_block name="rotor_origin" />
+            <xacro:insert_block name="rotor_geometry" />
+            <material name="red"/>
+        </visual>
+        <inertial>
+            <xacro:insert_block name="rotor_origin" />
+            <xacro:insert_block name="rotor_inertia" />
+            <mass value="${rotor_mass}"/>
+        </inertial>
+    </link>
+
+    <!-- odometry link -->
+    <link name="odom_link">
+        <collision>
+            <xacro:insert_block name="odom_origin" />
+            <xacro:insert_block name="odom_geometry" />
+        </collision>
+        <visual>
+            <xacro:insert_block name="odom_origin" />
+            <xacro:insert_block name="odom_geometry" />
+            <material name="red"/>
+        </visual>
+        <inertial>
+            <xacro:insert_block name="odom_origin" />
+            <xacro:insert_block name="odom_inertia" />
+            <mass value="${odom_mass}"/>
+        </inertial>
+    </link>
+
+    <!-- odometry joint is a revolute joint with 0 limit ! -->
+    <joint name="odom_joint" type="revolute">
+        <parent link="link2" />
+        <xacro:insert_block name="odom_joint_origin" />
+        <parent link="link2"/>
+        <child link="odom_link"/>
+        <limit upper="0" lower="0" effort="0" velocity="0" />
+    </joint>
+
+    <transmission name="tran1">
+        <type>transmission_interface/SimpleTransmission</type>
+        <joint name="joint1">
+            <hardwareInterface>hardware_interface/EffortJointInterface</hardwareInterface>
+        </joint>
+        <actuator name="joint1_motor">
+            <hardwareInterface>hardware_interface/EffortJointInterface</hardwareInterface>
+            <mechanicalReduction>1</mechanicalReduction>
+        </actuator>
+    </transmission>
+
+    <transmission name="tran2">
+        <type>transmission_interface/SimpleTransmission</type>
+        <joint name="rotor_joint">
+            <hardwareInterface>hardware_interface/VelocityJointInterface</hardwareInterface>
+        </joint>
+        <actuator name="rotor_motor">
+            <hardwareInterface>hardware_interface/VelocityJointInterface</hardwareInterface>
+            <mechanicalReduction>1</mechanicalReduction>
+        </actuator>
+    </transmission>
+
+    <xacro:if value="${use_sim}">
+
+        <gazebo>
+            <plugin name="${namespace}_template_plugin" filename="libgazebo_template_plugin.so">
+                <robotNamespace>${namespace}</robotNamespace>
+                <publishFrequency>250</publishFrequency>
+            </plugin>
+        </gazebo>
+
+        <gazebo>
+            <plugin name="${namespace}_rotor_plugin" filename="libgazebo_rotor_plugin.so">
+                <robotNamespace>${namespace}</robotNamespace>
+                <rotor id="0">
+                    <jointName>rotor_joint</jointName>
+                    <linkName>rotor_link</linkName>
+                    <turningDirection>cw</turningDirection>
+                </rotor>
+                <motorConstant>6.56145e-7</motorConstant>
+                <momentConstant>0.0157</momentConstant>
+                <rotorDragCoefficient>0.0</rotorDragCoefficient>
+                <rollingMomentCoefficient>0.0</rollingMomentCoefficient>
+                <maxRotVelocity>3000</maxRotVelocity>
+                <timeConstantUp>0.0125</timeConstantUp>
+                <timeConstantDown>0.025</timeConstantDown>
+                <rotorVelocitySlowdownSim>10</rotorVelocitySlowdownSim>
+                <rosCommandTopicName>command_rpm</rosCommandTopicName>
+                <rosFeedbackTopicName>feedback_rpm</rosFeedbackTopicName>
+            </plugin>
+        </gazebo>
+
+        <gazebo>
+            <plugin name="${namespace}_odometry_plugin" filename="libgazebo_odometry_plugin.so">
+                <robotNamespace>${namespace}</robotNamespace>
+                <linkName>odom_link</linkName>
+                <randomEngineSeed>0</randomEngineSeed>
+                <noiseNormalPosition>0.0 0.0 0.0</noiseNormalPosition>
+                <noiseNormalQuaternion>0.0 0.0 0.0</noiseNormalQuaternion>
+                <noiseNormalLinearVelocity>0.0 0.0 0.0</noiseNormalLinearVelocity>
+                <noiseNormalAngularVelocity>0.0 0.0 0.0</noiseNormalAngularVelocity>
+                <rosOdomTopicName>odom</rosOdomTopicName>
+                <childFrameId>${namespace}</childFrameId> <!-- xjb 没啥用 不发 tf-->
+                <publishFrequency>250</publishFrequency>
+                <measurementDelay>0.02</measurementDelay>
+            </plugin>
+        </gazebo>
+
+        <gazebo>
+            <plugin name="${namespace}_imu_plugin" filename="libgazebo_imu_plugin.so">
+                <robotNamespace>${namespace}</robotNamespace>
+                <linkName>link2</linkName>
+                <frameId>${namespace}/link2</frameId> <!-- xjb tf prefix -->
+                <randomEngineSeed>0</randomEngineSeed>
+                <gyroscopeNoiseDensity>0.0</gyroscopeNoiseDensity>
+                <gyroscopeBiasRandomWalk>0.0</gyroscopeBiasRandomWalk>
+                <gyroscopeBiasCorrelationTime>0.0</gyroscopeBiasCorrelationTime>
+                <gyroscopeTurnOnBiasSigma>0.0</gyroscopeTurnOnBiasSigma>
+                <accelerometerNoiseDensity>0.0</accelerometerNoiseDensity>
+                <accelerometerRandomWalk>0.0</accelerometerRandomWalk>
+                <accelerometerBiasCorrelationTime>0.0</accelerometerBiasCorrelationTime>
+                <accelerometerTurnOnBiasSigma>0.0</accelerometerTurnOnBiasSigma>
+                <rosImuTopicName>imu</rosImuTopicName>
+                <publishFrequency>100</publishFrequency>
+            </plugin>
+        </gazebo>
+
+        <gazebo>
+            <plugin name="${namespace}_reconfigurable_plugin" filename="libgazebo_reconfigurable_plugin.so">
+                <robotNamespace>${namespace}</robotNamespace>
+                <actuatorJointName>joint1</actuatorJointName> <!-- xjb tf prefix -->
+                <reconfigurableJoint id="0">
+                    <jointName>mimic_joint</jointName>
+                    <multiplier>1.0</multiplier>
+                    <offset>0.0</offset>
+                    <sensitiveness>0.0</sensitiveness>
+                    <kp>0.1</kp>
+                    <kd>0.01</kd>
+                    <movingVelThreshold>0.0</movingVelThreshold>
+                </reconfigurableJoint>
+            </plugin>
+        </gazebo>
+
+    </xacro:if>
+</robot>

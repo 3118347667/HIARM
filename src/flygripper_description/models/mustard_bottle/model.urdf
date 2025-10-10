@@ -1,0 +1,22 @@
+<?xml version="1.0" ?>
+<robot name="mustard_bottle">
+  <link name="mustard_bottle__mustard_bottle_link">
+    <inertial>
+      <mass value="0.1"/>
+      <origin xyz="-0.01505 -0.0231   0.07504" rpy="0 0 0"/>
+      <inertia ixx="0.00024306134790849675" ixy="1.2579345702614378e-05" ixz="-8.24954705882353e-07" iyy="0.00026750229779411763" iyz="-1.1690506209150325e-06" izz="7.015540428104576e-05"/>
+    </inertial>
+    <collision name="mustard_bottle__mustard_bottle_collision">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://flygripper_description/models/mustard_bottle/meshes/obj_000005_collision.dae" scale="1.0 1.0 1.0"/>
+      </geometry>
+    </collision>
+    <visual name="mustard_bottle__mustard_bottle_visual">
+      <origin xyz="0 0 0" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://flygripper_description/models/mustard_bottle/meshes/obj_000005.dae" scale="1.0 1.0 1.0"/>
+      </geometry>
+    </visual>
+  </link>
+</robot>

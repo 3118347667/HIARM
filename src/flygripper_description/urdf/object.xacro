@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://ros.org/wiki/xacro" name="object">
+    <xacro:property name="obj_name"  value="$(arg obj_name)" />
+    <xacro:property name="use_sim"   value="$(arg use_sim)" />
+
+    <xacro:include filename="$(find flygripper_description)/models/${obj_name}/model.urdf" />
+
+    <xacro:if value="${use_sim}">
+        <gazebo>
+            <plugin name="${obj_name}_odometry_plugin" filename="libgazebo_odometry_plugin.so">
+                <robotNamespace>/</robotNamespace>
+                <linkName>${obj_name}__link</linkName>
+                <rosOdomTopicName>${obj_name}</rosOdomTopicName>
+
+                <randomEngineSeed>0</randomEngineSeed>
+                <noiseNormalPosition>0.0 0.0 0.0</noiseNormalPosition>
+                <noiseNormalQuaternion>0.0 0.0 0.0</noiseNormalQuaternion>
+                <noiseNormalLinearVelocity>0.0 0.0 0.0</noiseNormalLinearVelocity>
+                <noiseNormalAngularVelocity>0.0 0.0 0.0</noiseNormalAngularVelocity>
+
+                <frameId>world</frameId>
+                <childFrameId>${obj_name}</childFrameId> <!-- xjb 没啥用 不发 tf-->
+                <publishFrequency>333</publishFrequency> <!-- 333 -->
+                <measurementDelay>0.0</measurementDelay> <!-- 0.02 -->
+            </plugin>
+        </gazebo>
+    </xacro:if>
+</robot>
+

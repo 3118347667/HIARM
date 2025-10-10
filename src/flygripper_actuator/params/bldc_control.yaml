@@ -1,0 +1,21 @@
+# control loop settings
+loop_frequency: 250
+loop_time_error_threshold: 0.005
+
+# pid controller settings for BLDC motor
+k_p: 0.5
+k_i: 0.05
+k_d: 0.05
+
+integral_min: -1.0
+integral_max: 1.0
+integral_zone: 3.0
+
+dead_zone: 0.0
+command_min: -1.0
+command_max: 1.0
+
+
+
+
+

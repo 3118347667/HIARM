@@ -1,0 +1,37 @@
+<launch>
+    <!-- common parameters -->
+    <arg name="mav_name"  default="flygripper"/>
+    <arg name="namespace" default="$(arg mav_name)"/>
+    <arg name="joy_dev" default="/dev/input/js0"/>
+
+    <group ns="$(arg namespace)">
+        <node pkg="joy" type="joy_node" name="joy_node" output="screen">
+            <param name="dev" value="$(arg joy_dev)"/>
+            <param name="deadzone" value="0.05"/>
+            <param name="autorepeat_rate" value="50"/>
+        </node>
+
+<!--         <node pkg="flygripper_teleop" type="teleop_joy_test" name="teleop_joy_test" output="screen"> -->
+<!--             <param name="loop_frequency" value="100.0"/> -->
+
+<!--             <param name="actuator_topic" value="/$(arg namespace)/actuator_command"/> -->
+<!--             <param name="actuator_mode" value="position"/> -->
+<!--             <param name="actuator_scale" value="12.56"/> -->
+<!--             <param name="actuator_offset" value="-1.5707963267948966"/> -->
+<!--             <param name="actuator_velocity" value="3.14"/> -->
+<!--             <param name="actuator_min" value="-8000"/> -->
+<!--             <param name="actuator_max" value="8000"/> -->
+<!--             <param name="actuator_scale" value="5"/> -->
+<!--             <param name="actuator_offset" value="0"/> -->
+<!--             <param name="actuator_velocity" value="3.14"/> -->
+
+<!--             <param name="rotor_topic" value="/$(arg namespace)/rotor_command"/> -->
+<!--             <param name="rotor_scale" value="3000.0"/> -->
+<!--         </node> -->
+
+        <node pkg="flygripper_teleop" type="teleop_joy_node" name="teleop_joy_node" output="screen">
+            <remap from="joy_topic" to="joy"/>
+            <remap from="rc_in_topic" to="/mavros/rc/in"/>
+        </node>
+    </group>
+</launch>

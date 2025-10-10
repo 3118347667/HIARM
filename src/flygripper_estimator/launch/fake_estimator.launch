@@ -1,0 +1,16 @@
+<launch>
+    <!-- common parameters -->
+    <arg name="mav_name"  default="flygripper"/>
+    <arg name="namespace" default="$(arg mav_name)"/>
+    <arg name="use_sim"   default="true"/>
+
+    <group ns="$(arg namespace)">
+        <!-- TODO: robot_state_publisher: subscribe the joint_states and publish tf -->
+        <node name="flygripper_estimator_fake_node" pkg="flygripper_estimator" type="flygripper_estimator_fake_node" output="screen">
+            <!-- input -->
+            <!--             <remap from="robot_state" to="..." /> -->
+            <rosparam command="load" file="$(find flygripper_estimator)/params/estimator.yaml"/>
+        </node>
+    </group>
+
+</launch>

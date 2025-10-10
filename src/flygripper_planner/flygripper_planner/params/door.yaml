@@ -1,0 +1,24 @@
+# -------------------- DOOR ----------------------
+arc_angle: 1.0
+arc_radius: 1.0
+arc_point_num: 10
+
+# -------------------- OPT ----------------------
+K: 8
+M: 8
+
+rhoT: 10.0
+rhoV: 1000.0
+rhoA: 1000.0
+rhoDYaw: 1000.0
+
+fix_p: true
+pause_debug: false
+magic_number: 0
+# -------------------- NOT_USE ----------------------
+rhoPAlignmentDistance: 1.5
+rhoPAlignmentAngle: 1000.0
+rhoYawAlignmentAngle: 1000.0
+
+max_iteration: 300
+min_piece_num: 2

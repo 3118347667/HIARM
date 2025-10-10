@@ -1,0 +1,8 @@
+prefix=/usr/local
+
+Name: flygripper_actuator
+Description: Description of flygripper_actuator
+Version: 0.0.0
+Cflags: -I${prefix}/include
+Libs: -L${prefix}/lib 
+Requires: 

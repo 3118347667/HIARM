@@ -1,0 +1,8 @@
+prefix=/home/nv/flygripper_ws/src/cmake-build-debug/devel
+
+Name: flygripper_gazebo
+Description: Description of flygripper_gazebo
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

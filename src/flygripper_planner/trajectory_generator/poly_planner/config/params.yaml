@@ -1,0 +1,19 @@
+# Basic Params
+OdomFrame:                  'world'
+BoxMin:                     [-4.0, -3.0, 0.7]
+BoxMax:                     [ 4.0,  3.0, 0.8]
+Round:                      2
+
+# Advanced Params
+DiagWidth:                  1.2
+SideWidth:                  1.2
+
+MaxAccRate:                  1.0
+MaxVelRate:                  0.5
+WeightT:                     5000.0
+
+ChiVec:                      [1024.0, 1024.0, 1024.0]
+RelCostTol:                  1.0e-4
+C2Diffeo:                    True
+
+HeadingMode: 0 #0: none, 1: forward, 2: backward

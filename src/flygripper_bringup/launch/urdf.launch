@@ -1,0 +1,48 @@
+<launch>
+    <!-- common parameters -->
+    <arg name="mav_name"          default="flygripper"/>       <!-- template_robot -->
+    <arg name="namespace_prefix"  default="$(arg mav_name)"/>
+    <arg name="use_sim"           default="true"/>             <!-- sim or real -->
+
+    <!-- gazebo simulator configuration parameter -->
+    <arg name="world_name" default="basic"/>
+    <arg name="debug"      default="false"/>
+    <arg name="paused"     default="false"/> <!-- start gazebo with physics paused -->
+    <arg name="gui"        default="false"/>  <!-- gazebo gui -->
+    <arg name="verbose"    default="true"/>
+
+    <group if="$(arg use_sim)">
+        <!-- 1. launch gazebo simulator -->
+        <include file="$(find flygripper_gazebo)/launch/load_gazebo.launch">
+            <arg name="world_name" value="$(arg world_name)"/>
+            <arg name="debug"      value="$(arg debug)" />
+            <arg name="paused"     value="$(arg paused)" />
+            <arg name="gui"        value="$(arg gui)" />
+            <arg name="verbose"    value="$(arg verbose)"/>
+        </include>
+    </group>
+
+    <!-- 2. load urdf from robot_description parameter and if sim, spawn robot in gazebo -->
+    <include file="$(find flygripper_description)/launch/load_robot_urdf.launch">
+        <arg name="use_sim"   value="$(arg use_sim)" />
+        <arg name="mav_name"  value="$(arg mav_name)" />
+        <arg name="namespace" value="$(arg namespace_prefix)"/> <!--$(arg namespace_prefix)_01 for multi-robot -->
+        <arg name="x"         value="0" />
+        <arg name="y"         value="0" />
+        <arg name="z"         value="0.1" />
+    </include>
+
+    <!-- multiple robot example: spawn another robot -->
+<!--    <include file="$(find flygripper_description)/launch/load_robot_urdf.launch">-->
+<!--        <arg name="use_sim"   value="$(arg use_sim)" />-->
+<!--        <arg name="mav_name"  value="$(arg mav_name)" />-->
+<!--        <arg name="namespace" value="$(arg namespace_prefix)_02"/>-->
+<!--        <arg name="x"         value="2" />-->
+<!--        <arg name="y"         value="0" />-->
+<!--        <arg name="z"         value="0" />-->
+<!--    </include>-->
+
+    <!-- 3. rviz configuration parameter -->
+<!--    <node name="rviz" pkg="rviz" type="rviz" args=" -d $(find flygripper_bringup)/rviz/default.rviz" />-->
+
+</launch>

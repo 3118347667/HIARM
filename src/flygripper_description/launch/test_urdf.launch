@@ -1,0 +1,26 @@
+<launch>
+    <!-- this launch file is only for testing the urdf file,
+         can not be used with either gazebo or real test -->
+    <!-- common parameters -->
+    <arg name="mav_name"  default="flygripper"/> <!-- template_robot -->
+    <arg name="namespace" default="$(arg mav_name)"/>
+    <arg name="model"     default="$(find flygripper_description)/urdf/$(arg mav_name).xacro"/>
+
+    <!-- send the robot XML to param server
+         with args of namespace and use_sim used in robot model name and gazebo_ros_control plugin -->
+    <param name="robot_description"
+           command="$(find xacro)/xacro '$(arg model)' namespace:=$(arg namespace) use_sim:=true"/>
+
+    <!-- joint_state_publisher: read the robot_description parameter and publish the joint_states -->
+    <!-- WARN (conflict with joint_state_controller in ros_control, gazebo ) -->
+    <node name="joint_state_publisher_gui" pkg="joint_state_publisher_gui" type="joint_state_publisher_gui"/>
+
+    <!-- robot_state_publisher: subscribe the joint_states and publish tf -->
+    <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher"/>
+
+    <!-- rviz configuration parameter -->
+    <node name="rviz" pkg="rviz" type="rviz" args=" -d $(find flygripper_description)/rviz/urdf.rviz" />
+
+
+
+</launch>

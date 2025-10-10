@@ -1,0 +1,8 @@
+prefix=/home/nv/flygripper_ws/src/cmake-build-debug/devel
+
+Name: flygripper_bringup
+Description: Description of flygripper_bringup
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

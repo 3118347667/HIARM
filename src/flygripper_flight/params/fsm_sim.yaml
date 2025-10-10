@@ -1,0 +1,77 @@
+# Control loop settings
+loop_frequency: 333
+loop_time_error_threshold: 0.1 # generally set to one cycle duration of loop_frequency
+# Timeout
+imu_timeout: 0.1
+odom_timeout: 0.1
+rotor_speed_timeout: 0.1
+actuator_state_timeout: 0.1
+fc_state_timeout: 3.0
+rc_input_timeout: 3.0
+battery_timeout: 3.0
+
+# Controller settings
+controller: 0 #0: Geometric, 1: NMPC
+command_mode: 2 # 0: Attitude, 1: Body Rate, 2: Rotor Thrust, 3: Body Rate Customized
+
+# Guided Mode
+auto_takeoff: false # Enable takeoff (else hovering) while switching to GUIDED MODE
+takeoff_height: 1.0 # Takeoff height
+
+# Traj Mode
+traj_trigger: true # Publish trigger while switching to TRAJ MODE
+
+# Velocity Teleop
+velocity_teleop: true # Use rc channel 0,1,2,3 to control the velocity in traj mode
+world_frame_velocity: true # Velocity teleportation in world frame or body frame
+velocity_scale_x: -0.3
+velocity_scale_y: -0.3
+velocity_scale_z: 0.3
+velocity_scale_yaw: -1.0
+
+# Admittance Control
+admittance_mode: 0 # 0: DISABLE, 1: ADMITTANCE, 2: ZERO_FORCE
+enable_admittance_x: true
+enable_admittance_y: true
+enable_admittance_z: false
+enable_admittance_yaw: false
+
+# coeff_M
+# inertia coefficient, which influence the maximum acceleration according to external force
+# smaller inertia, bigger acceleration
+coeff_M_x: 3.0
+coeff_M_y: 3.0
+coeff_M_z: 3.0
+coeff_M_yaw: 0.3
+
+# coeff_D
+# dumping coefficient, which influence the maximum velocity according to external force
+# external_force / coeff_D = max velocity
+coeff_D_x: 2.0
+coeff_D_y: 2.0
+coeff_D_z: 2.0
+coeff_D_yaw: 0.2
+
+# coeff_K
+# spring coefficient, which influence the maximum distance accroding to external force
+# zero force mode it is zero
+coeff_K_x: 2.0
+coeff_K_y: 2.0
+coeff_K_z: 2.0
+coeff_K_yaw: 0.2
+
+admittance_max_vel_x: 0.2
+admittance_max_vel_y: 0.2
+admittance_max_vel_z: 0.2
+admittance_max_vel_yaw: 0.5
+admittance_max_acc_x: 0.2
+admittance_max_acc_y: 0.2
+admittance_max_acc_z: 0.2
+admittance_max_acc_yaw: 0.5
+
+external_force_threshold: 0.3
+external_torque_threshold: 10.0 # big enough to not be triggered
+external_wrench_trigger_duration: 0.1
+external_wrench_cutoff_frequency: 3.0
+external_wrench_buffer_size: 1000
+

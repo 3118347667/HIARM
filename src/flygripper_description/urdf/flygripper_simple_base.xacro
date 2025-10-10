@@ -1,0 +1,513 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="$(arg namespace)">
+    <!-- Include common files -->
+    <xacro:include filename="$(find flygripper_description)/urdf/common.xacro" />
+    <xacro:include filename="$(find flygripper_description)/urdf/materials.xacro" />
+
+    <!-- Constants for robot dimensions -->
+    <xacro:property name="namespace" value="$(arg namespace)" />
+    <xacro:property name="use_sim" value="$(arg use_sim)" />
+
+    <xacro:macro name="gazebo_link_0_friction" params="link">
+        <gazebo reference="${link}">
+            <mu1 value="0.0" />
+            <mu2 value="0.0" />
+            <kp value="1000000.0" />
+            <kd value="1.0" />
+        </gazebo>
+    </xacro:macro>
+
+    <xacro:macro name="gazebo_link_high_friction" params="link">
+        <gazebo reference="${link}">
+            <mu1 value="10.0" />
+            <mu2 value="50.0" />
+            <kp value="1000000.0" />
+            <kd value="1.0" />
+        </gazebo>
+    </xacro:macro>
+
+    <![CDATA[
+        mass: 0.15*4(part) + 4*0.004(rotor) + 0.0001*2 (imu, odom) = 0.6162
+        inertia_xy: (0.08333333*0.15*(0.1*0.1+0.03*0.03)+0.125*0.125*0.15)*4 = 0.01
+        inertia_z: (0.08333333*0.15*(0.1*0.1+0.1*0.1)+0.125*0.125*2*0.15)*4 = 0.02
+
+        rotor_pos = (0.1 + 0.15 - joint_position * 0.02)/2;
+                  range from (0.05, 0.125), where joint_position range from (7.5, 0)
+
+        ^                 ^    ------------------
+      < 2 >             < 0 >  part_width: 0.1 m                         X
+        V                 V    __________________                        ^
+        |                 |                                              |
+        |                 |    part_distance: 0.15 m              Y <----o
+        ^                 ^    ------------------
+      < 1 > ----------- < 3 >  point 3 in 0 frame: [-(part_distance + 2*part_width/2), 0, 0] => [-0.25, 0, 0]
+        V                 V
+    ]]>
+
+    <!-- 4 Part Link -->
+    <xacro:property name="part_mass" value="0.15"/> <!-- kg -->
+    <xacro:property name="part_width" value="0.1"/> <!-- m -->
+    <xacro:property name="part_height" value="0.03"/> <!-- m -->
+    <xacro:property name="part_geometry">
+        <geometry>
+            <box size="${part_width} ${part_width} ${part_height}"/>
+        </geometry>
+    </xacro:property>
+    <xacro:property name="part_inertia">
+        <xacro:box_inertia x="${part_width}" y="${part_width}" z="${part_height}" mass="${part_mass}" />
+    </xacro:property>
+    <xacro:property name="part_origin">
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+    </xacro:property>
+
+    <!-- pulley -->
+    <xacro:property name="pulley_radius" value="0.02"/> <!-- m -->
+    <xacro:property name="motor_max_torque" value="1.0"/>    <!-- N*m -->
+    <xacro:property name="motor_max_velocity" value="10.0"/> <!-- rad/s -->
+
+    <xacro:property name="pulley_max_force" value="${motor_max_torque / pulley_radius}"/>         <!-- N -->
+    <xacro:property name="pulley_max_velocity" value="${motor_max_velocity * pulley_radius}"/>    <!-- m/s -->
+    <xacro:property name="part_distance" value="0.15"/>                                     <!-- m -->
+
+    <xacro:property name="prismatic_joint_limit" value="${part_distance - 0.0001}"/>        <!-- m -->
+<!--    <xacro:property name="prismatic_joint_limit" value="0.0"/> &lt;!&ndash; rigid!!!!!! &ndash;&gt;-->
+
+    <xacro:property name="prismatic_joint_origin" value="${part_distance + part_width}"/> <!-- m -->
+    <xacro:property name="prismatic_joint_damping" value="2.5"/> <!-- N*s -->
+    <xacro:property name="prismatic_joint_friction" value="10.5"/> <!-- N -->
+    
+    <!-- 4 Rotor Link -->
+    <xacro:property name="rotor_mass" value="0.004"/> <!-- kg -->
+    <xacro:property name="rotor_radius" value="0.0635"/> <!-- m -->
+    <xacro:property name="rotor_width" value="0.015"/> <!-- m -->
+    <xacro:property name="rotor_height" value="0.003"/> <!-- m -->
+    <xacro:property name="rotor_geometry">
+        <geometry>
+            <box size="${rotor_radius} ${rotor_width} ${rotor_height}"/>
+        </geometry>
+    </xacro:property>
+    <xacro:property name="rotor_inertia">
+        <xacro:box_inertia x="${rotor_radius}" y="${rotor_width}" z="${rotor_height}" mass="${rotor_mass}" />
+    </xacro:property>
+    <xacro:property name="rotor_origin">
+        <origin xyz="0 0 0" rpy="0 0 0"/>
+    </xacro:property>
+
+    <!-- rotor joint -->
+    <xacro:property name="rotor_offset_top" value="${0.01 + part_height/2}"/> <!-- m -->
+    <xacro:property name="rotor_joint_origin">
+        <origin xyz="0 0 ${rotor_offset_top}" rpy="0 0 0"/>
+    </xacro:property>
+
+
+    <!-- Virtual dummy root link -->
+    <link name="odom"/>
+    <joint name="fixed" type="fixed">
+        <parent link="odom"/>
+        <child link="right_up_part"/>
+    </joint>
+
+    <!-- Right up -->
+    <link name="right_up_part">
+        <collision>
+            <xacro:insert_block name="part_origin" />
+            <xacro:insert_block name="part_geometry" />
+        </collision>
+        <visual>
+            <xacro:insert_block name="part_origin" />
+            <xacro:insert_block name="part_geometry" />
+            <material name="orange"/>
+        </visual>
+        <inertial>
+            <xacro:insert_block name="part_origin" />
+            <mass value="${part_mass}"/>
+            <xacro:insert_block name="part_inertia" />
+        </inertial>
+    </link>
+    <joint name="right_up_rotor_joint" type="continuous">
+        <axis xyz="0 0 1"/>
+        <xacro:insert_block name="rotor_joint_origin" />
+        <!--      limit not work while type="continuous"-->
+        <!--        <limit effort="1.8" velocity="50."/>-->
+        <!--        <dynamics damping="0.0" friction="0.0"/>-->
+        <parent link="right_up_part"/>
+        <child link="right_up_rotor"/>
+    </joint>
+    <link name="right_up_rotor">
+        <collision>
+            <xacro:insert_block name="rotor_origin" />
+            <xacro:insert_block name="rotor_geometry" />
+        </collision>
+        <visual>
+            <xacro:insert_block name="rotor_origin" />
+            <xacro:insert_block name="rotor_geometry" />
+            <material name="blue"/>
+        </visual>
+        <inertial>
+            <xacro:insert_block name="rotor_origin" />
+            <mass value="${rotor_mass}"/>
+            <xacro:insert_block name="rotor_inertia" />
+        </inertial>
+    </link>
+
+    <!-- Right prismatic -->
+    <joint name="right_prismatic_joint" type="prismatic">
+        <axis xyz="1 0 0"/>
+        <origin xyz="-${prismatic_joint_origin} 0 0" rpy="0 0 0"/>
+        <limit effort="${pulley_max_force}" velocity="${pulley_max_velocity}" lower="0" upper="${prismatic_joint_limit}"/>
+        <dynamics damping="${prismatic_joint_damping}" friction="${prismatic_joint_friction}"/>
+        <parent link="right_up_part"/>
+        <child link="right_down_part"/>
+    </joint>
+
+    <!-- Right down -->
+    <link name="right_down_part">
+        <collision>
+            <xacro:insert_block name="part_origin" />
+            <xacro:insert_block name="part_geometry" />
+        </collision>
+        <visual>
+            <xacro:insert_block name="part_origin" />
+            <xacro:insert_block name="part_geometry" />
+            <material name="orange"/>
+        </visual>
+        <inertial>
+            <xacro:insert_block name="part_origin" />
+            <mass value="${part_mass}"/>
+            <xacro:insert_block name="part_inertia" />
+        </inertial>
+    </link>
+    <joint name="right_down_rotor_joint" type="continuous">
+        <axis xyz="0 0 1"/>
+        <xacro:insert_block name="rotor_joint_origin" />
+        <!--      limit not work while type="continuous"-->
+        <!--        <limit effort="1.8" velocity="50."/>-->
+        <!--        <dynamics damping="0.0" friction="0.0"/>-->
+        <parent link="right_down_part"/>
+        <child link="right_down_rotor"/>
+    </joint>
+    <link name="right_down_rotor">
+        <collision>
+            <xacro:insert_block name="rotor_origin" />
+            <xacro:insert_block name="rotor_geometry" />
+        </collision>
+        <visual>
+            <xacro:insert_block name="rotor_origin" />
+            <xacro:insert_block name="rotor_geometry" />
+            <material name="blue"/>
+        </visual>
+        <inertial>
+            <xacro:insert_block name="rotor_origin" />
+            <mass value="${rotor_mass}"/>
+            <xacro:insert_block name="rotor_inertia" />
+        </inertial>
+    </link>
+
+
+    <!-- Down prismatic -->
+    <joint name="down_prismatic_joint" type="prismatic">
+        <axis xyz="0 -1 0"/>
+        <origin xyz="0 ${prismatic_joint_origin} 0" rpy="0 0 0"/>
+        <limit effort="${pulley_max_force}" velocity="${pulley_max_velocity}" lower="0" upper="${prismatic_joint_limit}"/>
+        <dynamics damping="${prismatic_joint_damping}" friction="${prismatic_joint_friction}"/>
+        <parent link="right_down_part"/>
+        <child link="left_down_part"/>
+        <mimic joint="right_prismatic_joint" multiplier="1" offset="0"/>
+    </joint>
+
+    <!-- Left down -->
+    <link name="left_down_part">
+        <collision>
+            <xacro:insert_block name="part_origin" />
+            <xacro:insert_block name="part_geometry" />
+        </collision>
+        <visual>
+            <xacro:insert_block name="part_origin" />
+            <xacro:insert_block name="part_geometry" />
+            <material name="orange"/>
+        </visual>
+        <inertial>
+            <xacro:insert_block name="part_origin" />
+            <mass value="${part_mass}"/>
+            <xacro:insert_block name="part_inertia" />
+        </inertial>
+    </link>
+    <joint name="left_down_rotor_joint" type="continuous">
+        <axis xyz="0 0 1"/>
+        <xacro:insert_block name="rotor_joint_origin" />
+        <!--      limit not work while type="continuous"-->
+        <!--        <limit effort="1.8" velocity="50."/>-->
+        <!--        <dynamics damping="0.0" friction="0.0"/>-->
+        <parent link="left_down_part"/>
+        <child link="left_down_rotor"/>
+    </joint>
+    <link name="left_down_rotor">
+        <collision>
+            <xacro:insert_block name="rotor_origin" />
+            <xacro:insert_block name="rotor_geometry" />
+        </collision>
+        <visual>
+            <xacro:insert_block name="rotor_origin" />
+            <xacro:insert_block name="rotor_geometry" />
+            <material name="blue"/>
+        </visual>
+        <inertial>
+            <xacro:insert_block name="rotor_origin" />
+            <mass value="${rotor_mass}"/>
+            <xacro:insert_block name="rotor_inertia" />
+        </inertial>
+    </link>
+
+    <!-- Left prismatic -->
+    <joint name="left_prismatic_joint" type="prismatic">
+        <axis xyz="-1 0 0"/>
+        <origin xyz="${prismatic_joint_origin} 0 0" rpy="0 0 0"/>
+        <limit effort="${pulley_max_force}" velocity="${pulley_max_velocity}" lower="0" upper="${prismatic_joint_limit}"/>
+        <dynamics damping="${prismatic_joint_damping}" friction="${prismatic_joint_friction}"/>
+        <parent link="left_down_part"/>
+        <child link="left_up_part"/>
+        <mimic joint="right_prismatic_joint" multiplier="1" offset="0"/>
+    </joint>
+
+    <!-- Left up -->
+    <link name="left_up_part">
+        <collision>
+            <xacro:insert_block name="part_origin" />
+            <xacro:insert_block name="part_geometry" />
+        </collision>
+        <visual>
+            <xacro:insert_block name="part_origin" />
+            <xacro:insert_block name="part_geometry" />
+            <material name="orange"/>
+        </visual>
+        <inertial>
+            <xacro:insert_block name="part_origin" />
+            <mass value="${part_mass}"/>
+            <xacro:insert_block name="part_inertia" />
+        </inertial>
+    </link>
+    <joint name="left_up_rotor_joint" type="continuous">
+        <axis xyz="0 0 1"/>
+        <xacro:insert_block name="rotor_joint_origin" />
+        <!--      limit not work while type="continuous"-->
+        <!--        <limit effort="1.8" velocity="50."/>-->
+        <!--        <dynamics damping="0.0" friction="0.0"/>-->
+        <parent link="left_up_part"/>
+        <child link="left_up_rotor"/>
+    </joint>
+    <link name="left_up_rotor">
+        <collision>
+            <xacro:insert_block name="rotor_origin" />
+            <xacro:insert_block name="rotor_geometry" />
+        </collision>
+        <visual>
+            <xacro:insert_block name="rotor_origin" />
+            <xacro:insert_block name="rotor_geometry" />
+            <material name="blue"/>
+        </visual>
+        <inertial>
+            <xacro:insert_block name="rotor_origin" />
+            <mass value="${rotor_mass}"/>
+            <xacro:insert_block name="rotor_inertia" />
+        </inertial>
+    </link>
+
+    <!-- IMU and Odom -->
+    <joint name="odom_joint" type="revolute">
+        <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0" />
+        <parent link="left_down_part"/>
+        <child link="odom_link"/>
+        <limit upper="0" lower="0" effort="0" velocity="0" />
+    </joint>
+    <link name="odom_link">
+        <inertial>
+            <inertia ixx="0.00001" ixy="0.0" ixz="0.0" iyy="0.00001" iyz="0.0" izz="0.00001" /> <!-- [kg m^2] [kg m^2] [kg m^2] [kg m^2] [kg m^2] [kg m^2] -->
+            <mass value="0.001"/> <!-- kg -->
+            <origin xyz="0 0 0" rpy="0 0 0" />
+        </inertial>
+    </link>
+    <joint name="imu_joint" type="revolute">
+        <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0" />
+        <parent link="left_down_part"/>
+        <child link="imu_link"/>
+        <limit upper="0" lower="0" effort="0" velocity="0" />
+    </joint>
+    <link name="imu_link">
+        <inertial>
+            <inertia ixx="0.00001" ixy="0.0" ixz="0.0" iyy="0.00001" iyz="0.0" izz="0.00001" /> <!-- [kg m^2] [kg m^2] [kg m^2] [kg m^2] [kg m^2] [kg m^2] -->
+            <mass value="0.001"/> <!-- kg -->
+            <origin xyz="0 0 0" rpy="0 0 0" />
+        </inertial>
+    </link>
+    <!-- Object for biased CoG -->
+<!--    <link name="object1_link">-->
+<!--        <inertial>-->
+<!--            <mass value="0.08"/> &lt;!&ndash; kg &ndash;&gt;-->
+<!--            <xacro:box_inertia x="0.05" y="0.05" z="0.05" mass="0.08" />-->
+<!--            <origin xyz="0 0 0" rpy="0 0 0" />-->
+<!--        </inertial>-->
+<!--    </link>-->
+<!--    <joint name="object1_joint" type="revolute">-->
+<!--        <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0" />-->
+<!--        <parent link="left_down_part"/>-->
+<!--        <child link="object1_link"/>-->
+<!--        <limit upper="0" lower="0" effort="0" velocity="0" />-->
+<!--    </joint>-->
+
+<!--    <link name="object2_link">-->
+<!--        <inertial>-->
+<!--            <mass value="0.08"/> &lt;!&ndash; kg &ndash;&gt;-->
+<!--            <xacro:box_inertia x="0.05" y="0.05" z="0.05" mass="0.08" />-->
+<!--            <origin xyz="0 0 0" rpy="0 0 0" />-->
+<!--        </inertial>-->
+<!--    </link>-->
+<!--    <joint name="object2_joint" type="revolute">-->
+<!--        <origin xyz="0.0 0.0 0.0" rpy="0.0 0.0 0.0" />-->
+<!--        <parent link="right_down_part"/>-->
+<!--        <child link="object2_link"/>-->
+<!--        <limit upper="0" lower="0" effort="0" velocity="0" />-->
+<!--    </joint>-->
+
+    <xacro:if value="${use_sim}">
+        <gazebo>
+            <plugin name="${namespace}_rotor_plugin" filename="libgazebo_rotor_plugin.so">
+                <robotNamespace>${namespace}</robotNamespace>
+                <rotor id="0">
+                    <jointName>right_up_rotor_joint</jointName>
+                    <linkName>right_up_rotor</linkName>
+                    <turningDirection>ccw</turningDirection>
+                </rotor>
+                <rotor id="1">
+                    <jointName>left_down_rotor_joint</jointName>
+                    <linkName>left_down_rotor</linkName>
+                    <turningDirection>ccw</turningDirection>
+                </rotor>
+                <rotor id="2">
+                    <jointName>left_up_rotor_joint</jointName>
+                    <linkName>left_up_rotor</linkName>
+                    <turningDirection>cw</turningDirection>
+                </rotor>
+                <rotor id="3">
+                    <jointName>right_down_rotor_joint</jointName>
+                    <linkName>right_down_rotor</linkName>
+                    <turningDirection>cw</turningDirection>
+                </rotor>
+                <motorConstant>7.19543e-9</motorConstant>
+                <momentConstant>1.12968e-10</momentConstant>
+                <rotorDragCoefficient>0.0</rotorDragCoefficient> <!-- 8.06428e-05 -->
+                <rollingMomentCoefficient>0.0</rollingMomentCoefficient> <!-- 0.000001 -->
+                <maxRotVelocity>25100</maxRotVelocity> <!-- 3002 -->
+                <timeConstantUp>0.0</timeConstantUp> <!-- 0.0125 -->
+                <timeConstantDown>0.0</timeConstantDown> <!-- 0.025 -->
+                <dshotRpmMappingCoefficient>0.0094 -8.746306995940205e-06 1.791322293868279e-09</dshotRpmMappingCoefficient>
+                <rotorVelocitySlowdownSim>10</rotorVelocitySlowdownSim>
+                <rosCommandTopicName>rotor_command</rosCommandTopicName>
+                <rosFeedbackTopicName>rotor_speed</rosFeedbackTopicName>
+            </plugin>
+
+            <plugin name="${namespace}_reconfigurable_plugin" filename="libgazebo_reconfigurable_plugin.so">
+                <robotNamespace>${namespace}</robotNamespace>
+                <rosCommandTopicName>actuator_command</rosCommandTopicName>
+                <rosFeedbackTopicName>actuator_state</rosFeedbackTopicName>
+                <reconfigurableJoint id="0">
+                    <jointName>right_prismatic_joint</jointName>
+                    <multiplier>0.02</multiplier> <!-- Mapping control input from 0-1.0 -->
+                    <offset>0.0</offset>
+                    <sensitiveness>0.0</sensitiveness>
+                    <kp>20</kp>
+                    <kd>5</kd>
+                </reconfigurableJoint>
+                <reconfigurableJoint id="1">
+                    <jointName>down_prismatic_joint</jointName>
+                    <multiplier>0.02</multiplier>
+                    <offset>0.0</offset>
+                    <sensitiveness>0.0</sensitiveness>
+                    <kp>20</kp>
+                    <kd>5</kd>
+                </reconfigurableJoint>
+                <reconfigurableJoint id="2">
+                    <jointName>left_prismatic_joint</jointName>
+                    <multiplier>0.02</multiplier>
+                    <offset>0.0</offset>
+                    <sensitiveness>0.0</sensitiveness>
+                    <kp>20</kp>
+                    <kd>5</kd>
+                </reconfigurableJoint>
+            </plugin>
+
+            <plugin name="${namespace}_odometry_plugin" filename="libgazebo_odometry_plugin.so">
+                <robotNamespace>${namespace}</robotNamespace>
+                <linkName>odom_link</linkName>
+                <randomEngineSeed>0</randomEngineSeed>
+                <noiseNormalPosition>0.0 0.0 0.0</noiseNormalPosition>
+                <noiseNormalQuaternion>0.0 0.0 0.0</noiseNormalQuaternion>
+                <noiseNormalLinearVelocity>0.0 0.0 0.0</noiseNormalLinearVelocity>
+                <noiseNormalAngularVelocity>0.0 0.0 0.0</noiseNormalAngularVelocity>
+                <rosOdomTopicName>odom</rosOdomTopicName>
+                <frameId>world</frameId>
+                <childFrameId>${namespace}</childFrameId> <!-- xjb 没啥用 不发 tf-->
+                <publishFrequency>333</publishFrequency> <!-- 333 -->
+                <measurementDelay>0.0</measurementDelay> <!-- 0.02 -->
+            </plugin>
+
+            <plugin name="${namespace}_imu_plugin" filename="libgazebo_imu_plugin.so">
+                <robotNamespace>${namespace}</robotNamespace>
+                <linkName>imu_link</linkName>
+                <frameId>${namespace}</frameId> <!-- xjb 没啥用 不发 tf -->
+                <randomEngineSeed>0</randomEngineSeed>
+                <gyroscopeNoiseDensity>0.0003394</gyroscopeNoiseDensity>
+                <gyroscopeBiasRandomWalk>0.000038785</gyroscopeBiasRandomWalk>
+                <gyroscopeBiasCorrelationTime>1000.0</gyroscopeBiasCorrelationTime>
+                <gyroscopeTurnOnBiasSigma>0.0087</gyroscopeTurnOnBiasSigma>
+                <accelerometerNoiseDensity>0.004</accelerometerNoiseDensity>
+                <accelerometerRandomWalk>0.006</accelerometerRandomWalk>
+                <accelerometerBiasCorrelationTime>300.0</accelerometerBiasCorrelationTime>
+                <accelerometerTurnOnBiasSigma>0.1960</accelerometerTurnOnBiasSigma>
+<!--                <gyroscopeNoiseDensity>0.0</gyroscopeNoiseDensity>-->
+<!--                <gyroscopeBiasRandomWalk>0.0</gyroscopeBiasRandomWalk>-->
+<!--                <gyroscopeBiasCorrelationTime>0.0</gyroscopeBiasCorrelationTime>-->
+<!--                <gyroscopeTurnOnBiasSigma>0.0</gyroscopeTurnOnBiasSigma>-->
+<!--                <accelerometerNoiseDensity>0.0</accelerometerNoiseDensity>-->
+<!--                <accelerometerRandomWalk>0.0</accelerometerRandomWalk>-->
+<!--                <accelerometerBiasCorrelationTime>0.0</accelerometerBiasCorrelationTime>-->
+<!--                <accelerometerTurnOnBiasSigma>0.0</accelerometerTurnOnBiasSigma>-->
+                <rosImuTopicName>imu</rosImuTopicName>
+                <publishFrequency>333</publishFrequency> <!-- 333 -->
+            </plugin>
+
+            <plugin name="${namespace}_grasp_plugin" filename="libgazebo_grasp_plugin.so">
+                <robotNamespace>${namespace}</robotNamespace>
+                <updateRate>100</updateRate>
+                <disableCollisionsOnAttach>true</disableCollisionsOnAttach>
+                <graspForcesAngleTolerance>120</graspForcesAngleTolerance>
+                <graspCountThreshold>10</graspCountThreshold>
+                <graspCountMax>20</graspCountMax>
+                <releaseDistanceTolerance>0.01</releaseDistanceTolerance>
+                <releaseToleranceMode>+</releaseToleranceMode>
+                <gripperLink>left_up_part</gripperLink>
+                <gripperLink>left_down_part</gripperLink>
+                <gripperLink>odom</gripperLink>
+                <gripperLink>right_down_part</gripperLink>
+                <rosGraspTopicName>grasp_status</rosGraspTopicName>
+            </plugin>
+        </gazebo>
+        <!-- zero friction for debug test -->
+        <xacro:gazebo_link_high_friction link="right_up_part"/>
+        <xacro:gazebo_link_high_friction link="right_down_part"/>
+        <xacro:gazebo_link_high_friction link="left_up_part"/>
+        <xacro:gazebo_link_high_friction link="left_down_part"/>
+
+        <gazebo reference="left_prismatic_joint">
+            <implicitSpringDamper>1</implicitSpringDamper>
+            <provideFeedback>true</provideFeedback>
+        </gazebo>
+        <gazebo reference="down_prismatic_joint">
+            <implicitSpringDamper>1</implicitSpringDamper>
+            <provideFeedback>true</provideFeedback>
+        </gazebo>
+        <gazebo reference="right_prismatic_joint">
+            <implicitSpringDamper>1</implicitSpringDamper>
+            <provideFeedback>true</provideFeedback>
+        </gazebo>
+    </xacro:if>
+</robot>

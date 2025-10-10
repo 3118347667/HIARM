@@ -1,0 +1,10 @@
+# control loop settings
+loop_frequency: 250
+loop_time_error_threshold: 0.005
+
+# servo dynamic parameters
+teleop_mode: 3 # 0: Disable, 1: Parameter, 2: Cmd, 3: Rc
+reference_position: 0.0
+one_morphing_angle: -12.0
+
+

@@ -1,0 +1,8 @@
+prefix=/usr/local
+
+Name: flygripper_common
+Description: Description of flygripper_common
+Version: 0.0.0
+Cflags: -I${prefix}/include
+Libs: -L${prefix}/lib 
+Requires: roscpp realtime_tools geometry_msgs nav_msgs sensor_msgs mavros_msgs flygripper_msgs

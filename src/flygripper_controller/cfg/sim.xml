@@ -1,0 +1,192 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<root version="2.3.8">
+ <tabbed_widget parent="main_window" name="Main Window">
+  <Tab containers="1" tab_name="position">
+   <Container>
+    <DockSplitter sizes="0.333002;0.333996;0.333002" count="3" orientation="-">
+     <DockArea name="...">
+      <plot mode="TimeSeries" style="Lines">
+       <range right="3608.208000" left="3497.254000" bottom="-3.094363" top="0.087216"/>
+       <limitY/>
+       <curve name="/flygripper/geometric_controller/data/position_current/x" color="#1ac938"/>
+       <curve name="/flygripper/geometric_controller/data/position_reference/x" color="#9467bd"/>
+      </plot>
+     </DockArea>
+     <DockArea name="...">
+      <plot mode="TimeSeries" style="Lines">
+       <range right="3608.208000" left="3497.254000" bottom="-2.632253" top="1.090804"/>
+       <limitY/>
+       <curve name="/flygripper/geometric_controller/data/position_current/y" color="#ff7f0e"/>
+       <curve name="/flygripper/geometric_controller/data/position_reference/y" color="#17becf"/>
+      </plot>
+     </DockArea>
+     <DockArea name="...">
+      <plot mode="TimeSeries" style="Lines">
+       <range right="3608.208000" left="3497.254000" bottom="0.445119" top="1.268871"/>
+       <limitY/>
+       <curve name="/flygripper/geometric_controller/data/position_current/z" color="#f14cc1"/>
+       <curve name="/flygripper/geometric_controller/data/position_reference/z" color="#bcbd22"/>
+      </plot>
+     </DockArea>
+    </DockSplitter>
+   </Container>
+  </Tab>
+  <Tab containers="1" tab_name="servo">
+   <Container>
+    <DockSplitter sizes="1" count="1" orientation="-">
+     <DockArea name="...">
+      <plot mode="TimeSeries" style="Dots">
+       <range right="3608.208000" left="3497.254000" bottom="-0.084218" top="3.139117"/>
+       <limitY/>
+       <curve name="/flygripper/actuator_state/position" color="#17becf"/>
+       <curve name="/flygripper/actuator_command/reference_position" color="#d62728"/>
+      </plot>
+     </DockArea>
+    </DockSplitter>
+   </Container>
+  </Tab>
+  <Tab containers="1" tab_name="external_force">
+   <Container>
+    <DockSplitter sizes="0.333002;0.333996;0.333002" count="3" orientation="-">
+     <DockArea name="...">
+      <plot mode="TimeSeries" style="Lines">
+       <range right="3608.208000" left="3497.254000" bottom="-27.537458" top="16.591075"/>
+       <limitY/>
+       <curve name="/flygripper/geometric_controller/data/external_force_l1/x" color="#1f77b4"/>
+       <curve name="/flygripper/geometric_controller/data/external_force_indi/x" color="#ff7f0e"/>
+      </plot>
+     </DockArea>
+     <DockArea name="...">
+      <plot mode="TimeSeries" style="Lines">
+       <range right="3608.208000" left="3497.254000" bottom="-19.992536" top="28.024932"/>
+       <limitY/>
+       <curve name="/flygripper/geometric_controller/data/external_force_l1/y" color="#d62728"/>
+       <curve name="/flygripper/geometric_controller/data/external_force_indi/y" color="#f14cc1"/>
+      </plot>
+     </DockArea>
+     <DockArea name="...">
+      <plot mode="TimeSeries" style="Lines">
+       <range right="3608.208000" left="3497.254000" bottom="-18.463081" top="20.640532"/>
+       <limitY/>
+       <curve name="/flygripper/geometric_controller/data/external_force_l1/z" color="#1ac938"/>
+       <curve name="/flygripper/geometric_controller/data/external_force_indi/z" color="#9467bd"/>
+      </plot>
+     </DockArea>
+    </DockSplitter>
+   </Container>
+  </Tab>
+  <Tab containers="1" tab_name="external_torque">
+   <Container>
+    <DockSplitter sizes="0.333002;0.333996;0.333002" count="3" orientation="-">
+     <DockArea name="...">
+      <plot mode="TimeSeries" style="Lines">
+       <range right="3608.208000" left="3497.254000" bottom="-14.938968" top="15.952976"/>
+       <limitY/>
+       <curve name="/flygripper/geometric_controller/data/external_torque_indi/x" color="#17becf"/>
+       <curve name="/flygripper/geometric_controller/data/external_torque_l1/x" color="#d62728"/>
+      </plot>
+     </DockArea>
+     <DockArea name="...">
+      <plot mode="TimeSeries" style="Lines">
+       <range right="3608.208000" left="3497.254000" bottom="-5.166267" top="4.519768"/>
+       <limitY/>
+       <curve name="/flygripper/geometric_controller/data/external_torque_indi/y" color="#bcbd22"/>
+       <curve name="/flygripper/geometric_controller/data/external_torque_l1/y" color="#1ac938"/>
+      </plot>
+     </DockArea>
+     <DockArea name="...">
+      <plot mode="TimeSeries" style="Lines">
+       <range right="3608.208000" left="3497.254000" bottom="-12.921742" top="10.484145"/>
+       <limitY/>
+       <curve name="/flygripper/geometric_controller/data/external_torque_indi/z" color="#1f77b4"/>
+       <curve name="/flygripper/geometric_controller/data/external_torque_l1/z" color="#ff7f0e"/>
+      </plot>
+     </DockArea>
+    </DockSplitter>
+   </Container>
+  </Tab>
+  <Tab containers="1" tab_name="rpm">
+   <Container>
+    <DockSplitter sizes="0.249751;0.250746;0.249751;0.249751" count="4" orientation="-">
+     <DockArea name="...">
+      <plot mode="TimeSeries" style="Lines">
+       <range right="3608.208000" left="3497.254000" bottom="5329.900000" top="18564.100000"/>
+       <limitY/>
+       <curve name="/flygripper/geometric_controller/data/rotor_velocities_current.0" color="#1f77b4"/>
+       <curve name="/flygripper/geometric_controller/data/rotor_velocities_desired.0" color="#d62728"/>
+      </plot>
+     </DockArea>
+     <DockArea name="...">
+      <plot mode="TimeSeries" style="Lines">
+       <range right="3608.208000" left="3497.254000" bottom="3901.790736" top="19179.109454"/>
+       <limitY/>
+       <curve name="/flygripper/geometric_controller/data/rotor_velocities_current_filtered.1" color="#9467bd"/>
+       <curve name="/flygripper/geometric_controller/data/rotor_velocities_desired.1" color="#1ac938"/>
+      </plot>
+     </DockArea>
+     <DockArea name="...">
+      <plot mode="TimeSeries" style="Lines">
+       <range right="3608.208000" left="3497.254000" bottom="3951.362633" top="18795.771220"/>
+       <limitY/>
+       <curve name="/flygripper/geometric_controller/data/rotor_velocities_current_filtered.2" color="#17becf"/>
+       <curve name="/flygripper/geometric_controller/data/rotor_velocities_desired.2" color="#ff7f0e"/>
+      </plot>
+     </DockArea>
+     <DockArea name="...">
+      <plot mode="TimeSeries" style="Lines">
+       <range right="3608.208000" left="3497.254000" bottom="4322.871786" top="19091.007976"/>
+       <limitY/>
+       <curve name="/flygripper/geometric_controller/data/rotor_velocities_current_filtered.3" color="#bcbd22"/>
+       <curve name="/flygripper/geometric_controller/data/rotor_velocities_desired.3" color="#f14cc1"/>
+      </plot>
+     </DockArea>
+    </DockSplitter>
+   </Container>
+  </Tab>
+  <Tab containers="1" tab_name="2D_position">
+   <Container>
+    <DockSplitter sizes="1" count="1" orientation="-">
+     <DockArea name="...">
+      <plot mode="XYPlot" style="Lines">
+       <range right="1.228237" left="-4.231301" bottom="-2.624589" top="1.079076"/>
+       <limitY/>
+       <curve curve_x="/flygripper/geometric_controller/data/position_current/x" name="/flygripper/geometric_controller/data/position_current/[x;y]" color="#9467bd" curve_y="/flygripper/geometric_controller/data/position_current/y"/>
+      </plot>
+     </DockArea>
+    </DockSplitter>
+   </Container>
+  </Tab>
+  <currentTabIndex index="5"/>
+ </tabbed_widget>
+ <use_relative_time_offset enabled="1"/>
+ <!-- - - - - - - - - - - - - - - -->
+ <!-- - - - - - - - - - - - - - - -->
+ <Plugins>
+  <plugin ID="DataLoad CSV">
+   <default time_axis=""/>
+  </plugin>
+  <plugin ID="DataLoad ROS bags">
+   <use_header_stamp value="false"/>
+   <use_renaming_rules value="false"/>
+   <discard_large_arrays value="true"/>
+   <max_array_size value="100"/>
+  </plugin>
+  <plugin ID="DataLoad ULog"/>
+  <plugin ID="ROS Topic Subscriber">
+   <use_header_stamp value="false"/>
+   <use_renaming_rules value="false"/>
+   <discard_large_arrays value="true"/>
+   <max_array_size value="100"/>
+  </plugin>
+  <plugin ID="UDP Server"/>
+  <plugin ID="WebSocket Server"/>
+  <plugin ID="ZMQ Subscriber"/>
+  <plugin ID="CSV Exporter" status="idle"/>
+  <plugin ID="ROS /rosout Visualization" status="idle"/>
+  <plugin ID="ROS Topic Re-Publisher" status="idle"/>
+ </Plugins>
+ <!-- - - - - - - - - - - - - - - -->
+ <!-- - - - - - - - - - - - - - - -->
+ <!-- - - - - - - - - - - - - - - -->
+</root>
+

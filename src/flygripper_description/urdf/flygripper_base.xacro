@@ -1,0 +1,954 @@
+<?xml version="1.0"?>
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="$(arg namespace)">
+    <!-- Include common files -->
+    <xacro:include filename="$(find flygripper_description)/urdf/common.xacro" />
+    <xacro:include filename="$(find flygripper_description)/urdf/materials.xacro" />
+
+    <!-- CONSTANT -->
+    <xacro:property name="namespace" value="$(arg namespace)" />
+    <xacro:property name="use_sim" value="$(arg use_sim)" />
+    <xacro:property name="mesh_path" value="package://flygripper_description/models/flygripper" />
+
+    <!-- LINK FRICTION MACRO -->
+    <xacro:macro name="gazebo_link_0_friction" params="link">
+        <gazebo reference="${link}">
+            <mu1 value="0.0" />
+            <mu2 value="0.0" />
+            <kp value="1000000.0" />
+            <kd value="1.0" />
+        </gazebo>
+    </xacro:macro>
+
+    <xacro:macro name="gazebo_link_high_friction" params="link">
+        <gazebo reference="${link}">
+            <mu1 value="10.0" />
+            <mu2 value="50.0" />
+            <kp value="1000000.0" />
+            <kd value="1.0" />
+        </gazebo>
+    </xacro:macro>
+
+    <!-- PULLEY PROPERTY -->
+    <xacro:property name="motor_max_torque"    value="1.0"/>                                      <!-- N*m -->
+    <xacro:property name="motor_max_velocity"  value="11.5"/>                                     <!-- rad/s -->
+
+    <xacro:property name="pulley_radius"       value="0.02"/>                                     <!-- m -->
+    <xacro:property name="pulley_max_force"    value="${motor_max_torque / pulley_radius}"/>      <!-- N -->
+    <xacro:property name="pulley_max_velocity" value="${motor_max_velocity * pulley_radius}"/>    <!-- m/s -->
+
+    <!-- JOINT LIMIT PROPERTY -->
+    <xacro:property name="prismatic_joint_position_lower" value="-0.05"/> <!-- -0.05 -->
+    <xacro:property name="prismatic_joint_position_upper" value="0.0"/>
+    <xacro:property name="prismatic_joint_limit">
+      <limit effort="${pulley_max_force}" velocity="${pulley_max_velocity}"
+             lower="${prismatic_joint_position_lower}" upper="${prismatic_joint_position_upper}"/>
+      <dynamics damping="2.0" friction="10.0" />
+    </xacro:property>
+
+    <xacro:property name="revolute_joint_angle_lower" value="0.0"/>
+    <xacro:property name="revolute_joint_angle_upper" value="0.785"/> <!-- 0.785 -->
+    <xacro:property name="revolute_joint_limit">
+      <limit effort="3.0" velocity="3.14"
+             lower="${revolute_joint_angle_lower}" upper="${revolute_joint_angle_upper}"/>
+      <dynamics damping="1.0" friction="1.0" />
+    </xacro:property>
+
+    <!-- DEFINITION OF BASE_LINK AND VIRTUAL ROOT LINK  -->
+    <xacro:property name="base_link" value="left_down_link"/>
+    <link name="odom"/>
+    <joint name="fixed" type="fixed">
+        <parent link="odom"/>
+        <child link="${base_link}"/>
+    </joint>
+
+    <!-- IMU AND ODOM -->
+    <joint name="odom_joint" type="revolute">
+      <origin xyz="0.0 0.0 0.01" rpy="0.0 0.0 0.0" />
+      <parent link="${base_link}"/>
+      <child link="odom_link"/>
+      <limit upper="0" lower="0" effort="0" velocity="0" />
+    </joint>
+    <link name="odom_link">
+      <inertial>
+          <inertia ixx="0.00001" ixy="0.0" ixz="0.0" iyy="0.00001" iyz="0.0" izz="0.00001" /> <!-- [kg m^2] [kg m^2] [kg m^2] [kg m^2] [kg m^2] [kg m^2] -->
+          <mass value="0.01"/> <!-- kg -->
+          <origin xyz="0 0 0" rpy="0 0 0" />
+      </inertial>
+    </link>
+    <joint name="imu_joint" type="revolute">
+      <origin xyz="0.0 0.0 0.01" rpy="0.0 0.0 0.0" />
+      <parent link="${base_link}"/>
+      <child link="imu_link"/>
+      <limit upper="0" lower="0" effort="0" velocity="0" />
+    </joint>
+    <link name="imu_link">
+      <inertial>
+          <inertia ixx="0.00001" ixy="0.0" ixz="0.0" iyy="0.00001" iyz="0.0" izz="0.00001" /> <!-- [kg m^2] [kg m^2] [kg m^2] [kg m^2] [kg m^2] [kg m^2] -->
+          <mass value="0.015"/> <!-- kg -->
+          <origin xyz="0 0 0" rpy="0 0 0" />
+      </inertial>
+    </link>
+
+    <!-- ******************************************************* SOLIDWORKS TO URDF  ********************************************************************************* -->
+    <link
+    name="left_down_link">
+    <inertial>
+      <origin
+        xyz="0.0013123 -0.0012234 0.018211"
+        rpy="0 0 0" />
+      <mass
+        value="0.091794" />
+      <inertia
+        ixx="7.6714E-05"
+        ixy="-3.4025E-05"
+        ixz="-1.802E-06"
+        iyy="7.0904E-05"
+        iyz="-1.743E-06"
+        izz="0.0001464" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}/left_down_link.dae" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}/left_down_link.dae" />
+      </geometry>
+    </collision>
+    </link>
+    <link
+    name="left_down_rotor_link">
+    <inertial>
+      <origin
+        xyz="6.3887E-06 3.6351E-06 -0.00023636"
+        rpy="0 0 0" />
+      <mass
+        value="0.0128" />
+      <inertia
+        ixx="7.5645E-07"
+        ixy="9.837E-11"
+        ixz="-7.112E-09"
+        iyy="7.5639E-07"
+        iyz="-5.4736E-09"
+        izz="1.129E-06" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}/left_down_rotor_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1.0 0.6 0.8 0.9" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}/left_down_rotor_link.STL" />
+      </geometry>
+    </collision>
+    </link>
+    <joint
+    name="left_down_rotor_joint"
+    type="continuous">
+    <origin
+      xyz="-0.0064798 0.015743 -0.017645"
+      rpy="0 0 0" />
+    <parent
+      link="left_down_link" />
+    <child
+      link="left_down_rotor_link" />
+    <axis
+      xyz="-0.018681 -0.01465 0.99972" />
+    </joint>
+    <link
+    name="left_slide_rail_link">
+    <inertial>
+      <origin
+        xyz="-0.024225 -0.0021367 0.001046"
+        rpy="0 0 0" />
+      <mass
+        value="0.021589" />
+      <inertia
+        ixx="1.6017E-06"
+        ixy="3.4855E-08"
+        ixz="-1.8323E-07"
+        iyy="1.0022E-05"
+        iyz="-2.0947E-08"
+        izz="1.1492E-05" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}/left_slide_rail_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}/left_slide_rail_link.STL" />
+      </geometry>
+    </collision>
+    </link>
+    <joint
+    name="left_prismatic_joint"
+    type="prismatic">
+    <origin
+      xyz="0.13081 0.026914 0.0057395"
+      rpy="0 0 0" />
+    <parent
+      link="left_down_link" />
+    <child
+      link="left_slide_rail_link" />
+    <axis
+      xyz="0.99982 -0.0038089 0.018627" />
+    <xacro:insert_block name="prismatic_joint_limit" />
+    </joint>
+    <link
+    name="left_up_link">
+    <inertial>
+      <origin
+        xyz="0.044492 -0.010822 0.016694"
+        rpy="0 0 0" />
+      <mass
+        value="0.07933" />
+      <inertia
+        ixx="3.005E-05"
+        ixy="5.4928E-06"
+        ixz="-1.5508E-06"
+        iyy="8.8595E-05"
+        iyz="-3.1842E-07"
+        izz="0.00011731" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}/left_up_link.dae" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}/left_up_link.dae" />
+      </geometry>
+    </collision>
+    </link>
+    <joint
+    name="left_revolute_joint"
+    type="revolute">
+    <origin
+      xyz="0 0 0"
+      rpy="0 0 0" />
+    <parent
+      link="left_slide_rail_link" />
+    <child
+      link="left_up_link" />
+    <axis
+      xyz="0.018681 0.01465 -0.99972" />
+    <xacro:insert_block name="revolute_joint_limit" />
+    </joint>
+    <link
+    name="left_up_rotor_link">
+    <inertial>
+      <origin
+        xyz="-0.00012537 -9.6132E-05 0.0066935"
+        rpy="0 0 0" />
+      <mass
+        value="0.0128" />
+      <inertia
+        ixx="7.5643E-07"
+        ixy="1.0854E-10"
+        ixz="-6.9418E-09"
+        iyy="7.564E-07"
+        iyz="-5.608E-09"
+        izz="1.129E-06" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}/left_up_rotor_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1.0 0.6 0.8 0.9" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}/left_up_rotor_link.STL" />
+      </geometry>
+    </collision>
+    </link>
+    <joint
+    name="left_up_rotor_joint"
+    type="continuous">
+    <origin
+      xyz="0.040521 0.00081217 -0.02602"
+      rpy="0 0 0" />
+    <parent
+      link="left_up_link" />
+    <child
+      link="left_up_rotor_link" />
+    <axis
+      xyz="-0.018681 -0.01465 0.99972" />
+    </joint>
+    <link
+    name="down_slide_rail_link">
+    <inertial>
+      <origin
+        xyz="0.016197 0.057727 0.001374"
+        rpy="0 0 0" />
+      <mass
+        value="0.014039" />
+      <inertia
+        ixx="9.7881E-06"
+        ixy="-3.6851E-08"
+        ixz="-6.6927E-10"
+        iyy="1.0818E-07"
+        iyz="-1.4107E-07"
+        izz="9.793E-06" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}/down_slide_rail_link.STL"/>
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}/down_slide_rail_link.STL"/>
+      </geometry>
+    </collision>
+    </link>
+    <joint
+    name="down_prismatic_joint"
+    type="prismatic">
+    <origin
+      xyz="-0.04069 -0.13946 0.0032386"
+      rpy="0 0 0" />
+    <parent
+      link="left_down_link" />
+    <child
+      link="down_slide_rail_link" />
+    <axis
+      xyz="-0.003535 -0.99989 -0.014718" />
+    <xacro:insert_block name="prismatic_joint_limit" />
+    </joint>
+    <link
+    name="right_down_link">
+    <inertial>
+      <origin
+        xyz="0.001319 0.00067754 0.018239"
+        rpy="0 0 0" />
+      <mass
+        value="0.091794" />
+      <inertia
+        ixx="7.7195E-05"
+        ixy="3.4019E-05"
+        ixz="-7.9585E-07"
+        iyy="7.0385E-05"
+        iyz="-4.7915E-07"
+        izz="0.00014644" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}/right_down_link.dae" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}/right_down_link.dae" />
+      </geometry>
+    </collision>
+    </link>
+    <joint
+    name="right_down_fixed_joint"
+    type="prismatic">
+    <origin
+      xyz="0.040058 -0.03916 -0.0058679"
+      rpy="0 0 0" />
+    <parent
+      link="down_slide_rail_link" />
+    <child
+      link="right_down_link" />
+    <axis
+      xyz="0.003535 0.99989 0.014718" />
+    <limit
+      lower="0"
+      upper="0"
+      effort="0"
+      velocity="0" />
+    </joint>
+    <link
+    name="right_down_rotor_link">
+    <inertial>
+      <origin
+        xyz="-0.00012525 -9.6114E-05 0.0066935"
+        rpy="0 0 0" />
+      <mass
+        value="0.0128" />
+      <inertia
+        ixx="7.5644E-07"
+        ixy="1.1072E-10"
+        ixz="-6.9513E-09"
+        iyy="7.564E-07"
+        iyz="-5.6092E-09"
+        izz="1.129E-06" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}/right_down_rotor_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1.0 0.6 0.8 0.9" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}/right_down_rotor_link.STL" />
+      </geometry>
+    </collision>
+    </link>
+    <joint
+    name="right_down_rotor_joint"
+    type="continuous">
+    <origin
+      xyz="-0.006703 -0.015068 -0.025035"
+      rpy="0 0 0" />
+    <parent
+      link="right_down_link" />
+    <child
+      link="right_down_rotor_link" />
+    <axis
+      xyz="-0.018681 -0.01465 0.99972" />
+    </joint>
+    <link
+    name="right_slide_rail_link">
+    <inertial>
+      <origin
+        xyz="-0.024209 0.0022762 0.0011109"
+        rpy="0 0 0" />
+      <mass
+        value="0.021589" />
+      <inertia
+        ixx="1.6017E-06"
+        ixy="3.1784E-08"
+        ixz="-1.8296E-07"
+        iyy="1.0022E-05"
+        iyz="-2.1008E-08"
+        izz="1.1492E-05" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}/right_slide_rail_link.STL"/>
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}/right_slide_rail_link.STL"/>
+      </geometry>
+    </collision>
+    </link>
+    <joint
+    name="right_prismatic_joint"
+    type="prismatic">
+    <origin
+      xyz="0.13079 -0.027996 0.0049345"
+      rpy="0 0 0" />
+    <parent
+      link="right_down_link" />
+    <child
+      link="right_slide_rail_link" />
+    <axis
+      xyz="0.99982 -0.0038089 0.018627" />
+    <xacro:insert_block name="prismatic_joint_limit" />
+    </joint>
+    <link
+    name="right_up_link">
+    <inertial>
+      <origin
+        xyz="0.043756 0.012927 0.017004"
+        rpy="0 0 0" />
+      <mass
+        value="0.07903" />
+      <inertia
+        ixx="3.0913E-05"
+        ixy="-8.9094E-06"
+        ixz="-1.7456E-06"
+        iyy="8.7735E-05"
+        iyz="-6.0012E-07"
+        izz="0.0001173" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}/right_up_link.dae" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}/right_up_link.dae" />
+      </geometry>
+    </collision>
+    </link>
+    <joint
+    name="right_revolute_joint"
+    type="revolute">
+    <origin
+      xyz="0 0 0"
+      rpy="0 0 0" />
+    <parent
+      link="right_slide_rail_link" />
+    <child
+      link="right_up_link" />
+    <axis
+      xyz="-0.018681 -0.01465 0.99972" />
+    <xacro:insert_block name="revolute_joint_limit" />
+    </joint>
+    <link
+    name="right_up_rotor_link">
+    <inertial>
+      <origin
+        xyz="-0.00012525 -9.6115E-05 0.0066935"
+        rpy="0 0 0" />
+      <mass
+        value="0.0128" />
+      <inertia
+        ixx="7.5644E-07"
+        ixy="1.1064E-10"
+        ixz="-6.9509E-09"
+        iyy="7.564E-07"
+        iyz="-5.6091E-09"
+        izz="1.129E-06" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}/right_up_rotor_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1.0 0.6 0.8 0.9" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}/right_up_rotor_link.STL" />
+      </geometry>
+    </collision>
+    </link>
+    <joint
+    name="right_up_rotor_joint"
+    type="continuous">
+    <origin
+      xyz="0.040495 0.0025739 -0.025995"
+      rpy="0 0 0" />
+    <parent
+      link="right_up_link" />
+    <child
+      link="right_up_rotor_link" />
+    <axis
+      xyz="-0.018681 -0.01465 0.99972" />
+    </joint>
+    <link
+    name="servo_link">
+    <inertial>
+      <origin
+        xyz="0.00015077 0.00027397 0.0060085"
+        rpy="0 0 0" />
+      <mass
+        value="0.010784" />
+      <inertia
+        ixx="6.0573E-07"
+        ixy="-3.3672E-08"
+        ixz="-1.3277E-08"
+        iyy="9.4062E-07"
+        iyz="-5.7471E-09"
+        izz="1.2895E-06" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}/servo_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="0.75294 0.75294 0.75294 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}/servo_link.STL" />
+      </geometry>
+    </collision>
+    </link>
+    <joint
+    name="servo_fixed_joint"
+    type="fixed">
+    <origin
+      xyz="0.046331 0.013956 0.0094726"
+      rpy="0 0 0" />
+    <parent
+      link="right_up_link" />
+    <child
+      link="servo_link" />
+    <axis
+      xyz="0 0 0" />
+    </joint>
+    <link
+    name="servo_horn_link">
+    <inertial>
+      <origin
+        xyz="-1.2348E-05 -0.00034405 -5.6975E-06"
+        rpy="0 0 0" />
+      <mass
+        value="0.0005401" />
+      <inertia
+        ixx="1.7329E-08"
+        ixy="1.2401E-11"
+        ixz="3.5202E-12"
+        iyy="3.4047E-08"
+        iyz="2.461E-10"
+        izz="1.7271E-08" />
+    </inertial>
+    <visual>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}/servo_horn_link.STL" />
+      </geometry>
+      <material
+        name="">
+        <color
+          rgba="1 1 1 1" />
+      </material>
+    </visual>
+    <collision>
+      <origin
+        xyz="0 0 0"
+        rpy="0 0 0" />
+      <geometry>
+        <mesh
+          filename="${mesh_path}/servo_horn_link.STL" />
+      </geometry>
+    </collision>
+    </link>
+    <joint
+    name="servo_revolute_joint"
+    type="fixed">
+    <origin
+      xyz="0.0088985 0.015601 0.0063966"
+      rpy="0 0 0" />
+    <parent
+      link="servo_link" />
+    <child
+      link="servo_horn_link" />
+    <axis
+      xyz="-0.00077151 -0.99989 -0.014667" />
+    </joint>
+    <!-- ******************************************************************************************************************************************************** -->
+
+<!-- GAZEBO PLUGIN -->
+<xacro:if value="${use_sim}">
+    <gazebo>
+        <plugin name="${namespace}_rotor_plugin" filename="libgazebo_rotor_plugin.so">
+            <robotNamespace>${namespace}</robotNamespace>
+            <rotor id="0">
+                <jointName>right_up_rotor_joint</jointName>
+                <linkName>right_up_rotor_link</linkName>
+                <turningDirection>ccw</turningDirection>
+            </rotor>
+            <rotor id="1">
+                <jointName>left_down_rotor_joint</jointName>
+                <linkName>left_down_rotor_link</linkName>
+                <turningDirection>ccw</turningDirection>
+            </rotor>
+            <rotor id="2">
+                <jointName>left_up_rotor_joint</jointName>
+                <linkName>left_up_rotor_link</linkName>
+                <turningDirection>cw</turningDirection>
+            </rotor>
+            <rotor id="3">
+                <jointName>right_down_rotor_joint</jointName>
+                <linkName>right_down_rotor_link</linkName>
+                <turningDirection>cw</turningDirection>
+            </rotor>
+            <motorConstant>7.19543e-9</motorConstant> <!-- 4.76e-9 -->
+            <momentConstant>1.12968e-10</momentConstant>  <!-- 7.536e-11 -->
+            <rotorDragCoefficient>0.0</rotorDragCoefficient>
+            <rollingMomentCoefficient>0.0</rollingMomentCoefficient>
+            <maxRotVelocity>18167.64672310778</maxRotVelocity> <!-- 3002 -->
+            <timeConstantUp>0.0</timeConstantUp> <!-- 0.0125 -->
+            <timeConstantDown>0.0</timeConstantDown> <!-- 0.025 -->
+            <dshotRpmMappingCoefficient>0.0094 -8.746306995940205e-06 1.791322293868279e-09</dshotRpmMappingCoefficient>
+            <rotorVelocitySlowdownSim>10</rotorVelocitySlowdownSim>
+            <rosCommandTopicName>rotor_command</rosCommandTopicName>
+            <rosFeedbackTopicName>rotor_speed</rosFeedbackTopicName>
+        </plugin>
+
+        <plugin name="${namespace}_reconfigurable_plugin" filename="libgazebo_reconfigurable_plugin.so">
+            <robotNamespace>${namespace}</robotNamespace>
+            <rosCommandTopicName>actuator_command</rosCommandTopicName>
+            <rosFeedbackTopicName>actuator_state</rosFeedbackTopicName>
+            <reconfigurableJoint id="0">
+                <jointName>right_prismatic_joint</jointName>
+                <multiplier>-0.01</multiplier> <!-- Mapping control input from 0-1.0 -->
+                <offset>0.0</offset>
+                <sensitiveness>0.0</sensitiveness>
+                <kp>20</kp>
+                <kd>5</kd>
+            </reconfigurableJoint>
+            <reconfigurableJoint id="1">
+                <jointName>down_prismatic_joint</jointName>
+                <multiplier>-0.01</multiplier>
+                <offset>0.0</offset>
+                <sensitiveness>0.0</sensitiveness>
+                <kp>20</kp>
+                <kd>5</kd>
+            </reconfigurableJoint>
+            <reconfigurableJoint id="2">
+                <jointName>left_prismatic_joint</jointName>
+                <multiplier>-0.01</multiplier>
+                <offset>0.0</offset>
+                <sensitiveness>0.0</sensitiveness>
+                <kp>20</kp>
+                <kd>5</kd>
+            </reconfigurableJoint>
+            <reconfigurableJoint id="3">
+                <jointName>left_revolute_joint</jointName>
+                <multiplier>0.2616</multiplier>
+                <offset>0.0</offset>
+                <sensitiveness>2.0</sensitiveness>
+                <kp>4.0</kp>
+                <kd>1.0</kd>
+            </reconfigurableJoint>
+            <reconfigurableJoint id="4">
+                <jointName>right_revolute_joint</jointName>
+                <multiplier>0.2616</multiplier>
+                <offset>0.0</offset>
+                <sensitiveness>2.0</sensitiveness>
+                <kp>4.0</kp>
+                <kd>1.0</kd>
+            </reconfigurableJoint>
+        </plugin>
+
+        <plugin name="${namespace}_odometry_plugin" filename="libgazebo_odometry_plugin.so">
+            <robotNamespace>${namespace}</robotNamespace>
+            <linkName>odom_link</linkName>
+            <randomEngineSeed>0</randomEngineSeed>
+            <noiseNormalPosition>0.0 0.0 0.0</noiseNormalPosition>
+            <noiseNormalQuaternion>0.0 0.0 0.0</noiseNormalQuaternion>
+            <noiseNormalLinearVelocity>0.0 0.0 0.0</noiseNormalLinearVelocity>
+            <noiseNormalAngularVelocity>0.0 0.0 0.0</noiseNormalAngularVelocity>
+            <rosOdomTopicName>odom</rosOdomTopicName>
+            <frameId>world</frameId>
+            <childFrameId>${namespace}</childFrameId> <!-- xjb 没啥用 不发 tf-->
+            <publishFrequency>333</publishFrequency>
+            <measurementDelay>0.0</measurementDelay>
+        </plugin>
+
+        <plugin name="${namespace}_imu_plugin" filename="libgazebo_imu_plugin.so">
+            <robotNamespace>${namespace}</robotNamespace>
+            <linkName>imu_link</linkName>
+            <frameId>${namespace}</frameId> <!-- xjb 没啥用 不发 tf -->
+            <randomEngineSeed>0</randomEngineSeed>
+            <gyroscopeNoiseDensity>0.0</gyroscopeNoiseDensity> <!-- 0.0003394 -->
+            <gyroscopeBiasRandomWalk>0.0</gyroscopeBiasRandomWalk> <!-- 0.000038785 -->
+            <gyroscopeBiasCorrelationTime>0.0</gyroscopeBiasCorrelationTime> <!-- 1000.0 -->
+            <gyroscopeTurnOnBiasSigma>0.0</gyroscopeTurnOnBiasSigma> <!-- 0.0087 -->
+            <accelerometerNoiseDensity>0.0</accelerometerNoiseDensity> <!-- 0.004 -->
+            <accelerometerRandomWalk>0.0</accelerometerRandomWalk> <!-- 0.006 -->
+            <accelerometerBiasCorrelationTime>0</accelerometerBiasCorrelationTime> <!-- 300.0 -->
+            <accelerometerTurnOnBiasSigma>0.0</accelerometerTurnOnBiasSigma> <!-- 0.1960 -->
+            <rosImuTopicName>imu</rosImuTopicName>
+            <publishFrequency>333</publishFrequency>
+        </plugin>
+
+        <plugin name="${namespace}_grasp_plugin" filename="libgazebo_grasp_plugin.so">
+            <robotNamespace>${namespace}</robotNamespace>
+            <updateRate>100</updateRate>
+            <disableCollisionsOnAttach>true</disableCollisionsOnAttach>
+            <graspForcesAngleTolerance>120</graspForcesAngleTolerance>
+            <graspCountThreshold>2</graspCountThreshold>
+            <graspCountMax>4</graspCountMax>
+            <releaseDistanceTolerance>0.01</releaseDistanceTolerance>
+            <releaseToleranceMode>+</releaseToleranceMode>
+            <gripperLink>left_up_link</gripperLink>
+            <gripperLink>odom</gripperLink>
+            <gripperLink>right_down_link</gripperLink>
+            <gripperLink>right_up_link</gripperLink>
+            <rosGraspTopicName>grasp_status</rosGraspTopicName>
+        </plugin>
+
+        <plugin name="${namespace}_interactive_plugin" filename="libgazebo_interactive_plugin.so">
+            <robotNamespace>${namespace}</robotNamespace>
+            <linkName>right_down_link</linkName>
+            <relativeForce>false</relativeForce>
+            <relativeTorque>true</relativeTorque>
+            <rosCommandTopicName>applied_wrench</rosCommandTopicName>
+            <commandTimeout>1.0</commandTimeout>
+        </plugin>
+
+    </gazebo>
+
+        <!-- High friction configuration for grasping -->
+        <xacro:gazebo_link_high_friction link="right_up_link"/>
+        <xacro:gazebo_link_high_friction link="right_down_link"/>
+        <xacro:gazebo_link_high_friction link="left_up_link"/>
+        <xacro:gazebo_link_high_friction link="left_down_link"/>
+
+       <!-- Spring and damper configuration for morphing -->
+        <gazebo reference="left_prismatic_joint">
+            <implicitSpringDamper>1</implicitSpringDamper>
+            <provideFeedback>true</provideFeedback>
+        </gazebo>
+        <gazebo reference="down_prismatic_joint">
+            <implicitSpringDamper>1</implicitSpringDamper>
+            <provideFeedback>true</provideFeedback>
+        </gazebo>
+        <gazebo reference="right_prismatic_joint">
+            <implicitSpringDamper>1</implicitSpringDamper>
+            <provideFeedback>true</provideFeedback>
+        </gazebo>
+        <gazebo reference="left_revolute_joint">
+            <implicitSpringDamper>1</implicitSpringDamper>
+            <provideFeedback>true</provideFeedback>
+        </gazebo>
+        <gazebo reference="right_revolute_joint">
+            <implicitSpringDamper>1</implicitSpringDamper>
+            <provideFeedback>true</provideFeedback>
+        </gazebo>
+
+</xacro:if>
+
+</robot>

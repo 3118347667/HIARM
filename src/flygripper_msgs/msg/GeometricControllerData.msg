@@ -1,0 +1,49 @@
+geometry_msgs/Vector3 position_reference
+geometry_msgs/Vector3 position_current
+geometry_msgs/Vector3 velocity_reference
+geometry_msgs/Vector3 velocity_current
+geometry_msgs/Vector3 acceleration_reference
+geometry_msgs/Vector3 acceleration_current
+geometry_msgs/Vector3 acceleration_current_filtered
+
+geometry_msgs/Vector3 position_error
+geometry_msgs/Vector3 velocity_error
+geometry_msgs/Vector3 acceleration_desired
+geometry_msgs/Vector3 thrust_acceleration_desired
+float64 thrust_desired
+
+geometry_msgs/Quaternion attitude_desired
+geometry_msgs/Quaternion attitude_current
+
+geometry_msgs/Vector3 attitude_desired_rpy
+geometry_msgs/Vector3 attitude_current_rpy
+float64 attitude_error_angle
+geometry_msgs/Vector3 attitude_error_axis
+geometry_msgs/Vector3 attitude_feedback
+
+geometry_msgs/Vector3 omega_reference
+geometry_msgs/Vector3 omega_desired
+
+geometry_msgs/Vector3 omega_current
+geometry_msgs/Vector3 omega_current_filtered
+geometry_msgs/Vector3 omega_feedback
+
+geometry_msgs/Vector3 alpha_current_filtered
+geometry_msgs/Vector3 alpha_reference
+geometry_msgs/Vector3 alpha_desired
+
+geometry_msgs/Vector3 torque_desired
+
+geometry_msgs/Vector3 torque_current_filtered
+float64 thrust_current_filtered
+
+geometry_msgs/Vector3 external_force_indi
+geometry_msgs/Vector3 external_torque_indi
+geometry_msgs/Vector3 external_force_l1
+geometry_msgs/Vector3 external_torque_l1
+
+float64[] rotor_velocities_current
+float64[] rotor_velocities_current_filtered
+float64[] rotor_velocities_desired
+
+

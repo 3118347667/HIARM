@@ -1,0 +1,8 @@
+prefix=/home/charmyoung/flygripper_ws/src/cmake-build-debug/devel
+
+Name: flygripper_estimator
+Description: Description of flygripper_estimator
+Version: 0.0.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

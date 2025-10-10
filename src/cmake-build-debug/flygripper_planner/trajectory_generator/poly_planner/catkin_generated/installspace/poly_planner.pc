@@ -1,0 +1,8 @@
+prefix=/usr/local
+
+Name: poly_planner
+Description: Description of poly_planner
+Version: 0.1.0
+Cflags: 
+Libs: -L${prefix}/lib 
+Requires: 

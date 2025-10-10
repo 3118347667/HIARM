@@ -1,0 +1,18 @@
+# Frequency of the estimator
+update_frequency: 333
+timeout: 0.1
+
+# Low pass filter
+lpf_cutoff_frequency: 12.0 # 12.0
+lpf_sampling_frequency: 333.0
+
+# Extrinsic transform (NOT IMPLEMENTED)
+Body_T_Odom:  [ 1.0, 0.0, 0.0, 0.0,
+                0.0, 1.0, 0.0, 0.0,
+                0.0, 0.0, 1.0, 0.0,
+                0.0, 0.0, 0.0, 1.0 ]
+
+Body_T_Imu:  [ 1.0, 0.0, 0.0, 0.0,
+                0.0, 1.0, 0.0, 0.0,
+                0.0, 0.0, 1.0, 0.0,
+                0.0, 0.0, 0.0, 1.0 ]
