@@ -820,6 +820,7 @@
         </plugin>
 
         <plugin name="${namespace}_reconfigurable_plugin" filename="libgazebo_reconfigurable_plugin.so">
+            <commandRateLimit>1.0</commandRateLimit>
             <robotNamespace>${namespace}</robotNamespace>
             <rosCommandTopicName>actuator_command</rosCommandTopicName>
             <rosFeedbackTopicName>actuator_state</rosFeedbackTopicName>
@@ -901,6 +902,9 @@
             <robotNamespace>${namespace}</robotNamespace>
             <updateRate>100</updateRate>
             <disableCollisionsOnAttach>true</disableCollisionsOnAttach>
+            <commandedRelease>true</commandedRelease>
+            <releaseStartPosition>4.5</releaseStartPosition>
+            <fullyOpenPosition>0.5</fullyOpenPosition>
             <graspForcesAngleTolerance>120</graspForcesAngleTolerance>
             <graspCountThreshold>2</graspCountThreshold>
             <graspCountMax>4</graspCountMax>

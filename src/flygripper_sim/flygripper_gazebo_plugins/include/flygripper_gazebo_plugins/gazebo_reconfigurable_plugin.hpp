@@ -46,6 +46,8 @@ class GazeboReconfigurablePlugin : public ModelPlugin {
     }
 
     world_ = model_->GetWorld();
+    getSdfParam<double>(kPluginName, sdf_, "commandRateLimit", command_rate_limit_, 0.0);
+    last_update_time_ = world_->SimTime().Double();
     // Check that ROS has been initialized
     if(!ros::isInitialized())
     {
@@ -182,8 +184,16 @@ class GazeboReconfigurablePlugin : public ModelPlugin {
  private:
 
   void PassiveJointControl(double dt){
+    // Smooth the physical actuator target instead of applying an instantaneous 0 -> 5 step.
+    double target = actuator_command_.reference_position;
+    if (command_rate_limit_ > 0.0) {
+      double step = command_rate_limit_ * std::max(0.0, dt);
+      filtered_reference_position_ += ignition::math::clamp(target-filtered_reference_position_, -step, step);
+    } else {
+      filtered_reference_position_ = target;
+    }
     // TODO: Debug for oscillation of tendon driven as first one that should be published
-    bool debug_pub = false;
+    double largest_tracking_error = -1.0;
 
     for (auto & param : reconfigurable_joint_params_){
       auto & joint = param.joint;
@@ -193,10 +203,10 @@ class GazeboReconfigurablePlugin : public ModelPlugin {
       double reference_position = 0.0;
       double reference_velocity = 0.0;
       // if out of sensitiveness
-      if (std::abs(actuator_command_.reference_position) >= param.sensitiveness){
-        reference_position = actuator_command_.reference_position > 0 ?
-                             actuator_command_.reference_position - param.sensitiveness :
-                             actuator_command_.reference_position + param.sensitiveness;
+      if (std::abs(filtered_reference_position_) >= param.sensitiveness){
+        reference_position = filtered_reference_position_ > 0 ?
+                             filtered_reference_position_ - param.sensitiveness :
+                             filtered_reference_position_ + param.sensitiveness;
         reference_velocity = actuator_command_.reference_velocity;
       }
       // if need recover to zero, current position is out of sensitiveness
@@ -219,11 +229,17 @@ class GazeboReconfigurablePlugin : public ModelPlugin {
                                          -param.max_effort,
                                          param.max_effort);
 
-      if (!debug_pub){
-        actuator_state_.position = (cur_pos - param.offset)/param.multiplier;
+      // Report the least settled joint, so a finished slider cannot hide a moving hinge.
+      double effective_position = (cur_pos - param.offset) / param.multiplier;
+      if (param.sensitiveness > 0.0 && std::abs(effective_position) > 0.01) {
+        effective_position += effective_position > 0.0 ? param.sensitiveness : -param.sensitiveness;
+      }
+      double error = std::abs(effective_position - actuator_command_.reference_position);
+      if (error > largest_tracking_error) {
+        largest_tracking_error = error;
+        actuator_state_.position = effective_position;
         actuator_state_.velocity = cur_vel / param.multiplier;
-        actuator_state_.effort = 0;
-        debug_pub = true;
+        actuator_state_.effort = cmd_effort * param.multiplier;
       }
       // TODO: Control enable or not, try to simulate bouncing and tendon property
       bool control_enabled = true;
@@ -233,8 +249,7 @@ class GazeboReconfigurablePlugin : public ModelPlugin {
 //       param.joint_name.c_str(), des_pos, cur_pos, des_vel, cur_vel, cmd_effort, int(control_enabled));
 
       if (control_enabled){
-        joint->SetForce(0,
-                        cmd_effort);
+        joint->SetForce(0, cmd_effort);
       } else{
         joint->SetForce(0, 0);
       }
@@ -247,6 +262,8 @@ class GazeboReconfigurablePlugin : public ModelPlugin {
     actuator_state_.header.stamp = ros::Time::now();
     ros_feedback_pub_.publish(actuator_state_);
   }
+  double command_rate_limit_ = 0.0;
+  double filtered_reference_position_ = 0.0;
   const std::string kPluginName = "GazeboReconfigurablePlugin";
 
   // Pointer to the gazebo objects

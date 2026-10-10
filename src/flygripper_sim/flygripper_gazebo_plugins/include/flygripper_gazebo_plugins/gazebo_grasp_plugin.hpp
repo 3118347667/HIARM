@@ -1,10 +1,13 @@
 #pragma once
 #include <Eigen/Eigen>
+#include <atomic>
 
 // ROS
 #include <ros/ros.h>
 #include <pluginlib/class_loader.h>
 #include <std_msgs/Bool.h>
+#include <flygripper_msgs/ActuatorCommand.h>
+#include <flygripper_msgs/ActuatorState.h>
 
 // Gazebo
 #include <gazebo/gazebo.hh>
@@ -69,7 +72,7 @@ class ObjectAttachInfo{
       model_(model),
       disable_colllisions_on_attach_(disable_colllisions_on_attach){
     Reset();
-    fixed_joint_ = model->GetWorld()->Physics()->CreateJoint("revolute");
+    fixed_joint_ = model->GetWorld()->Physics()->CreateJoint("fixed");
   };
 
   void Reset(){
@@ -88,12 +91,11 @@ class ObjectAttachInfo{
                 attach_gripper_name.c_str(), contact_gripper_name.c_str());
       return;
     }
-    GzPose3d joint_origin = object_link->WorldPose() - gripper_link->WorldPose();
+    // Joint::Load expects the anchor pose in the CHILD frame, not a parent-relative pose.
+    GzPose3d joint_origin = GzPose3d::Zero;
 
     fixed_joint_->Load(gripper_link, object_link, joint_origin);
     fixed_joint_->Init();
-    fixed_joint_->SetUpperLimit(0, 0);
-    fixed_joint_->SetLowerLimit(0, 0);
     if (disable_colllisions_on_attach_){
       object_link->SetCollideMode("none");
     }
@@ -148,6 +150,9 @@ class GazeboGraspPlugin : public ModelPlugin {
       return;
     }
     world_ = model_->GetWorld();
+    getSdfParam<bool>(kPluginName, sdf_, "commandedRelease", commanded_release_, false);
+    getSdfParam<double>(kPluginName, sdf_, "releaseStartPosition", release_start_position_, 4.5);
+    getSdfParam<double>(kPluginName, sdf_, "fullyOpenPosition", fully_open_position_, 0.5);
 
     // Check that ROS has been initialized
     if(!ros::isInitialized())
@@ -277,6 +282,10 @@ class GazeboGraspPlugin : public ModelPlugin {
     physics::ContactManager *contactManager = world_->Physics()->GetContactManager();
     contactManager->PublishContacts();  // TODO not sure this is required?
     filter_name_ = model->GetScopedName();
+    // Observe all robot contacts for diagnostics; grasp membership remains unchanged.
+    for (auto link : model_->GetLinks())
+      for (auto collision : link->GetCollisions())
+        collision_names.push_back(collision->GetScopedName());
     std::string topic = contactManager->CreateFilter(filter_name_, collision_names);
     if (!contact_sub_)
     {
@@ -306,7 +315,17 @@ class GazeboGraspPlugin : public ModelPlugin {
              kPluginName.c_str(), robot_namespace_.c_str());
   }
 
+  void CommandCallback(const flygripper_msgs::ActuatorCommand::ConstPtr& msg) {
+    opening_requested_ = msg->reference_position < 0.1;
+  }
+
+  void StateCallback(const flygripper_msgs::ActuatorState::ConstPtr& msg) {
+    measured_actuator_position_ = msg->position;
+  }
+
   void SetupROS(){
+    command_sub_ = model_nh_.subscribe("actuator_command", 1, &GazeboGraspPlugin::CommandCallback, this);
+    state_sub_ = model_nh_.subscribe("actuator_state", 1, &GazeboGraspPlugin::StateCallback, this);
     ros_grasp_pub_ = model_nh_.advertise<std_msgs::Bool>(
         ros_grasp_topic_name_, 1);
   }
@@ -327,6 +346,28 @@ class GazeboGraspPlugin : public ModelPlugin {
           boost::dynamic_pointer_cast<physics::Collision>(
               world_->EntityByName(contact_msg->contact(i).collision2()));
 
+      if (collision1 && collision2 &&
+          (collision1->GetScopedName().find("support_stage_") != std::string::npos ||
+           collision2->GetScopedName().find("support_stage_") != std::string::npos)) {
+        double depth = 0.0;
+        for (int k=0; k<contact_msg->contact(i).depth_size(); ++k)
+          depth = std::max(depth, contact_msg->contact(i).depth(k));
+        ROS_WARN_THROTTLE(0.2, "GripperSupportContact %s / %s depth=%g",
+                         collision1->GetScopedName().c_str(), collision2->GetScopedName().c_str(), depth);
+      }
+      if (collision1 && collision2 &&
+          (collision1->GetScopedName().find("coke_can") != std::string::npos ||
+           collision2->GetScopedName().find("coke_can") != std::string::npos)) {
+        // Separate throttle: ordinary finger contacts must not hide rotor impacts.
+        if (collision1->GetScopedName().find("_rotor_link") != std::string::npos ||
+            collision2->GetScopedName().find("_rotor_link") != std::string::npos) {
+          ROS_WARN_THROTTLE(0.1, "CanRotorContact %s / %s",
+                           collision1->GetScopedName().c_str(), collision2->GetScopedName().c_str());
+        } else {
+          ROS_WARN_THROTTLE(0.1, "CanContact %s / %s",
+                           collision1->GetScopedName().c_str(), collision2->GetScopedName().c_str());
+        }
+      }
       if ((collision1 && !collision1->IsStatic()) && (collision2
           && !collision2->IsStatic()))
       {
@@ -385,6 +426,8 @@ class GazeboGraspPlugin : public ModelPlugin {
           for (int k = 0; k < contact.count; ++k)
             force.push_back(contact.wrench[k].body2Force);
         }
+
+        if (!gripper_collision || !object_collision) continue;
 
         GzVector3d avg_force;
         // compute average/sum of the forces applied on the object
@@ -471,7 +514,7 @@ class GazeboGraspPlugin : public ModelPlugin {
 
       ObjectAttachInfo& object_attach_info_ = object_attaches_[object_name];
       // If the object is already attached, skip
-      if (object_attach_info_.attached){
+      if (object_attach_info_.attached || (commanded_release_ && opening_requested_)){
         continue;
       }
 
@@ -563,8 +606,15 @@ class GazeboGraspPlugin : public ModelPlugin {
       detach_condition |= release_tolerance_mode_ == "abs" && std::abs(distance_diff) > release_distance_tolerance_;
       detach_condition |= release_tolerance_mode_ == "+"   && distance_diff > release_distance_tolerance_;
       detach_condition |= release_tolerance_mode_ == "-"   && distance_diff < -release_distance_tolerance_;
+      // A latched contact grasp must not be released by transport-induced link motion.
+      // Release only during commanded opening; measured near-open position also handles
+      // collision pairs whose object-origin distance is insensitive to opening.
+      if (commanded_release_) {
+        detach_condition = opening_requested_ && measured_actuator_position_ < release_start_position_ &&
+            (detach_condition || measured_actuator_position_ < fully_open_position_);
+      }
       if (detach_condition){
-        ROS_INFO("%s plugin: Object %s has been grasped", kPluginName.c_str(), object_name.c_str());
+        ROS_INFO("%s plugin: Object %s has been released", kPluginName.c_str(), object_name.c_str());
         PublishGraspMsg(false);
         // Detach object link from gripper link
         object_attach_info_.DetachObjectFromGripper();
@@ -650,6 +700,9 @@ class GazeboGraspPlugin : public ModelPlugin {
         double angle_diff = acos(f1.Dot(f2) / (f1_norm * f2_norm)) * 180 / M_PI; // degrees
         std::string name1 = iter2->first;
         std::string name2 = iter1->first;
+        // Multiple collision shapes lumped into one link are not opposing fingers.
+        if (collision_name_2_collision_.at(name1)->GetLink() ==
+            collision_name_2_collision_.at(name2)->GetLink()) continue;
 
         if (angle_diff >= min_angle_diff){
           double ratio = f1_norm > f2_norm ? f2_norm/f1_norm : f1_norm/f2_norm;
@@ -706,6 +759,11 @@ class GazeboGraspPlugin : public ModelPlugin {
   // ros
   ros::NodeHandle model_nh_;
   ros::Publisher ros_grasp_pub_;
+  ros::Subscriber command_sub_, state_sub_;
+  bool commanded_release_ = false;
+  double release_start_position_ = 4.5, fully_open_position_ = 0.5;
+  std::atomic<bool> opening_requested_{true};
+  std::atomic<double> measured_actuator_position_{0.0};
   std::string ros_grasp_topic_name_;
   std_msgs::Bool ros_grasp_msg_;
   bool ros_setup_;

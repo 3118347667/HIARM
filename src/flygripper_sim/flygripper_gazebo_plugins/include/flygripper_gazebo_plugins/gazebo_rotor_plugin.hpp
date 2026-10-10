@@ -125,9 +125,6 @@ class GazeboRotorPlugin : public ModelPlugin {
         return;
       }
 
-      rotor_velocity_filters_.push_back(std::make_unique<FirstOrderFilter<double>>(0.0,
-                                                                                   time_constant_up_,
-                                                                                   time_constant_down_));
       ROS_INFO("%s plugin: rotor %d jointName: %s, linkName: %s, turningDirections: %d",
                kPluginName.c_str(),
                i,
@@ -158,6 +155,13 @@ class GazeboRotorPlugin : public ModelPlugin {
         !getSdfParam<GzVector3d>(kPluginName, sdf_,
                                  "dshotRpmMappingCoefficient", dshot_rpm_coefficient_)){
       return;
+    }
+
+    // Construct filters only after their SDF time constants have been loaded.
+    // Before this point time_constant_up_/down_ are uninitialized.
+    for (int i = 0; i < rotor_num_; ++i) {
+      rotor_velocity_filters_.push_back(std::make_unique<FirstOrderFilter<double>>(
+          0.0, time_constant_up_, time_constant_down_));
     }
 
     // Here all rotor speed and its relevant coefficients
@@ -442,4 +446,3 @@ class GazeboRotorPlugin : public ModelPlugin {
 };
 
 } // namespace gazebo {
-
