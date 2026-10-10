@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#15304b">
+  <title>HIARM · 飞行与变形</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="/style.css">
+  <script type="importmap">{"imports":{"three":"/vendor/build/three.module.js","three/addons/":"/vendor/examples/jsm/"}}</script>
+</head>
+<body>
+  <header><div class="brand">HIARM <span>FLIGHT LAB</span></div><span class="connection" id="connection" role="status">正在连接仿真…</span></header>
+  <main>
+    <section class="viewport" aria-label="实时三维仿真">
+      <div id="canvas"></div>
+      <div class="scene-heading"><p class="eyebrow">LIVE SIMULATION</p><h1>飞行与变形</h1><p id="profile">正在读取场景</p></div>
+      <div class="view-controls"><button id="follow" aria-pressed="true">跟随飞行器</button><button id="overview">任务全景</button></div>
+      <div class="loading" id="loading" role="status">正在加载真实模型…</div>
+      <div class="telemetry"><div><span>高度</span><strong id="altitude">—</strong><small>m</small></div><div><span>速度</span><strong id="speed">—</strong><small>m/s</small></div><div><span>仿真时间</span><strong id="time">—</strong><small>s</small></div><div><span>夹爪位置</span><strong id="actuator">—</strong><small>rad</small></div></div>
+      <div class="view-help">拖动旋转 · 滚轮缩放 · 右键平移 <span id="fps"></span></div>
+    </section>
+    <aside>
+      <div class="mission-heading"><p class="eyebrow">MISSION CONTROL</p><h2>原始多阶段任务</h2><p id="progress">等待启动</p></div>
+      <button class="primary" id="mission" disabled>起飞并执行任务</button>
+      <button class="secondary" id="pause" disabled>暂停仿真</button>
+      <p id="message" role="status" aria-live="polite">任务包含自动起飞、轨迹飞行和夹爪动作。</p>
+      <ol id="stages" aria-label="任务阶段"></ol>
+      <div class="grasp-status"><span>物体抓取反馈</span><strong id="grasp">等待数据</strong></div>
+      <p class="note" id="scene-note"></p>
+      <details><summary>渲染与连接信息</summary><p id="renderer">正在初始化 WebGL</p><p id="model-count"></p><p id="position"></p><p>画面在本机浏览器绘制；仿真和控制器在容器中运行。</p></details>
+    </aside>
+  </main>
+  <script type="module" src="/app.js"></script>
+</body>
+</html>

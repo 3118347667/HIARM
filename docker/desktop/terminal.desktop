@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Terminal
+Exec=bash /ws/docker/open-window.sh terminal
+Icon=utilities-terminal
+Terminal=false

@@ -1,0 +1,29 @@
+name: hiarm
+services:
+  sim:
+    build:
+      context: .
+    image: hiarm:noetic-arm64
+    platform: linux/arm64
+    container_name: hiarm-sim
+    init: true
+    shm_size: 1gb
+    environment:
+      HIARM_GUI: ${HIARM_GUI:-false}
+      HIARM_DESKTOP: ${HIARM_DESKTOP:-false}
+      HIARM_MISSION: ${HIARM_MISSION:-original}
+    ports:
+      - "127.0.0.1:6080:6080"
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ../:/ws
+      - ../src:/host-src:ro
+      - source:/ws/src
+      - build:/ws/build
+      - devel:/ws/devel
+    working_dir: /ws
+    command: ["bash", "docker/start.sh"]
+volumes:
+  source:
+  build:
+  devel:

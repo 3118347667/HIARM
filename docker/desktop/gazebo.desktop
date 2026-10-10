@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Gazebo
+Exec=bash /ws/docker/open-window.sh gazebo
+Icon=applications-science
+Terminal=false

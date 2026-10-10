@@ -1,0 +1,73 @@
+Panels:
+  - Class: rviz/Displays
+    Name: Displays
+  - Class: rviz/Views
+    Name: Views
+Visualization Manager:
+  Class: ""
+  Global Options:
+    Background Color: 35; 42; 52
+    Fixed Frame: world
+    Frame Rate: 30
+  Displays:
+    - Class: rviz/Grid
+      Name: Ground grid
+      Enabled: true
+      Cell Size: 1
+      Plane Cell Count: 30
+      Color: 120; 130; 145
+      Alpha: 0.5
+      Reference Frame: world
+    - Class: rviz/RobotModel
+      Name: Gazebo robot
+      Enabled: true
+      Robot Description: /flygripper/robot_description
+      TF Prefix: flygripper
+      Visual Enabled: true
+      Collision Enabled: false
+      Alpha: 1
+      Update Interval: 0
+    - Class: rviz/Path
+      Name: Reference path
+      Enabled: true
+      Topic: /flygripper/reference
+      Color: 0; 220; 160
+      Buffer Length: 1
+      Line Style: Lines
+      Line Width: 0.03
+      Pose Style: None
+    - Class: rviz/Odometry
+      Name: Actual odometry
+      Enabled: true
+      Topic: /flygripper/odom
+      Keep: 100
+      Position Tolerance: 0.1
+      Angle Tolerance: 0.2
+      Shape:
+        Value: Arrow
+        Color: 255; 180; 50
+        Alpha: 1
+        Shaft Length: 0.15
+        Shaft Radius: 0.01
+        Head Length: 0.05
+        Head Radius: 0.025
+  Tools:
+    - Class: rviz/Interact
+    - Class: rviz/MoveCamera
+    - Class: rviz/Select
+  Views:
+    Current:
+      Class: rviz/Orbit
+      Target Frame: flygripper/odom
+      Distance: 2.5
+      Pitch: 0.45
+      Yaw: 0.8
+      Focal Point:
+        X: 0
+        Y: 0
+        Z: 0
+Window Geometry:
+  Width: 1200
+  Height: 790
+  X: 30
+  Y: 25

@@ -1,0 +1,15 @@
+# Small flight near the spawn point; original real_sim.yaml mission is unchanged.
+task_num: 1
+task_0:
+  plan_type: 0
+  plan_point_num: 1
+  plan_point_0: {x: 0.6, y: 0.0, z: 1.0, yaw: 0.0}
+  plan_terminal_vel: {x: 0.0, y: 0.0, z: 0.0}
+  plan_max_vel: 0.3
+  plan_max_acc: 0.4
+  plan_max_dyaw: 0.5
+  plan_tolerance: 0.08
+  morph_action: 0
+  morph_trigger: 0
+  morph_auto: true
+  morph_tolerance: 0.1

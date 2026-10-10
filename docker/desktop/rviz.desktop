@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=RViz
+Exec=bash /ws/docker/open-window.sh rviz
+Icon=applications-graphics
+Terminal=false

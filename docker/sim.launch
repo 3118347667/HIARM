@@ -1,0 +1,39 @@
+<launch>
+  <arg name="gui" default="true"/>
+  <arg name="mission" default="original"/>
+  <param name="/hiarm/mission" value="$(arg mission)"/>
+  <arg name="world" default="$(eval '/ws/docker/matched.world' if arg('mission') == 'original' else find('flygripper_gazebo') + '/worlds/basic.world')"/>
+  <param name="/hiarm/world_file" value="$(arg world)"/>
+  <env name="GAZEBO_MODEL_PATH" value="$(find flygripper_description)/models:$(find flygripper_gazebo)/models"/>
+
+  <include file="$(find gazebo_ros)/launch/empty_world.launch">
+    <arg name="world_name" value="$(arg world)"/>
+    <arg name="gui" value="$(arg gui)"/>
+    <arg name="verbose" value="true"/>
+  </include>
+
+  <include file="$(find flygripper_description)/launch/load_robot_urdf.launch">
+    <arg name="use_sim" value="true"/>
+    <arg name="mav_name" value="flygripper"/>
+    <arg name="namespace" value="flygripper"/>
+    <arg name="z" value="0.1"/>
+  </include>
+
+  <!-- Simulated FC only: no serial, USB, CAN or real MAVROS connection. -->
+  <node pkg="fake_mavros" type="mavros_node" name="mavros_node" ns="flygripper" output="screen"/>
+
+  <include file="$(find flygripper_flight)/launch/flight.launch">
+    <arg name="mav_name" value="flygripper"/>
+    <arg name="use_sim" value="true"/>
+  </include>
+
+  <param name="/flygripper/flygripper_flight_node/auto_takeoff" value="true"/>
+  <param name="/flygripper/flygripper_flight_node/velocity_teleop" value="false"/>
+  
+  <node pkg="flygripper_planner" type="real" name="real" ns="flygripper" output="screen">
+    <rosparam command="load" file="$(find flygripper_planner)/params/real_sim.yaml"/>
+    <rosparam command="load" file="/ws/docker/grasp-plan.yaml" if="$(eval arg('mission') == 'original')"/>
+    <rosparam command="load" file="/ws/docker/demo-plan.yaml" if="$(eval arg('mission') == 'demo')"/>
+    <remap from="trigger" to="/move_base_simple/goal"/>
+  </node>
+</launch>
