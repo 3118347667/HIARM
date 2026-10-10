@@ -76,6 +76,13 @@ target_link_libraries(gazebo_grasp_plugin ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES
 add_library(gazebo_interactive_plugin src/gazebo_interactive_plugin.cpp)
 target_link_libraries(gazebo_interactive_plugin ${catkin_LIBRARIES} ${GAZEBO_LIBRARIES})
 
+# These plugins include generated workspace message/parameter headers.
+foreach(plugin gazebo_template_plugin gazebo_rotor_plugin gazebo_odometry_plugin
+        gazebo_imu_plugin gazebo_reconfigurable_plugin gazebo_grasp_plugin
+        gazebo_interactive_plugin)
+  add_dependencies(${plugin} ${catkin_EXPORTED_TARGETS})
+endforeach()
+
 #############
 ## Install ##
 #############
@@ -99,4 +106,3 @@ ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
 LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
 RUNTIME DESTINATION ${CATKIN_GLOBAL_BIN_DESTINATION}
 )
-

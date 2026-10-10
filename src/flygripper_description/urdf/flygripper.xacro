@@ -1,5 +1,5 @@
 <?xml version="1.0"?>
 <robot xmlns:xacro="http://ros.org/wiki/xacro" name="flygripper">
-    <xacro:include filename="$(find flygripper_description)/urdf/flygripper_base.xacro" />
+    <xacro:include filename="flygripper_base.xacro" />
 </robot>
 

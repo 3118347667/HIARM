@@ -11,9 +11,7 @@ find_package(catkin REQUIRED COMPONENTS
 catkin_package(
 #  INCLUDE_DIRS include
 #  LIBRARIES irobot_msgs
-  CATKIN_DEPENDS multi_map_server
-  DEPENDS system_lib
-          message_runtime
+  CATKIN_DEPENDS roscpp rviz
 )
 
 ###########

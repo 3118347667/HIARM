@@ -17,4 +17,4 @@ include_directories(${catkin_INCLUDE_DIRS})
 
 add_executable(mavros_node src/mavros_node.cpp)
 target_link_libraries(mavros_node ${catkin_LIBRARIES})
-
+add_dependencies(mavros_node ${catkin_EXPORTED_TARGETS})

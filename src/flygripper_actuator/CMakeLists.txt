@@ -38,7 +38,7 @@ add_dependencies(bldc_node
         )
 
 # Feetech servo sdk
-file(GLOB FEETECH_SRC ${CMAKE_CURRENT_SOURCE_DIR}/external/feetech_servo/*.cpp)
+file(GLOB FEETECH_SRC ${CMAKE_CURRENT_SOURCE_DIR}/external/feetech_servo/[A-Za-z]*.cpp)
 add_library(feetech_servo SHARED ${FEETECH_SRC})
 
 add_executable(servo_node
@@ -73,7 +73,6 @@ install(DIRECTORY include/${PROJECT_NAME}/
 install(DIRECTORY scripts launch cfg
         DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}
         )
-
 
 
 

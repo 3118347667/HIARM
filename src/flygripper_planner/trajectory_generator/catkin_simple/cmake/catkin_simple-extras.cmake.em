@@ -80,7 +80,11 @@ macro(catkin_simple)
       set(${PROJECT_NAME}_LOCAL_MSG_DIR)
     endif()
     if(${PROJECT_NAME}_LOCAL_MSG_DIR)
-      add_message_files(DIRECTORY msg)
+      # AppleDouble (._*) metadata is not a ROS message definition.
+      file(GLOB ${PROJECT_NAME}_LOCAL_MSG_FILES
+        RELATIVE "${${PROJECT_NAME}_LOCAL_MSG_DIR}"
+        "${${PROJECT_NAME}_LOCAL_MSG_DIR}/[A-Za-z]*.msg")
+      add_message_files(DIRECTORY msg FILES ${${PROJECT_NAME}_LOCAL_MSG_FILES})
       set(${PROJECT_NAME}_DO_MESSAGE_GENERATION TRUE)
     endif()
 

@@ -42,3 +42,5 @@ add_executable(${PROJECT_NAME}_test
 target_link_libraries(${PROJECT_NAME}_test
         ${catkin_LIBRARIES}
         )
+add_dependencies(${PROJECT_NAME}_node ${catkin_EXPORTED_TARGETS})
+add_dependencies(${PROJECT_NAME}_test ${catkin_EXPORTED_TARGETS})

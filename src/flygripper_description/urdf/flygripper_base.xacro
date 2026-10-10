@@ -1,8 +1,11 @@
 <?xml version="1.0"?>
-<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="$(arg namespace)">
+<robot xmlns:xacro="http://www.ros.org/wiki/xacro" name="flygripper">
+    <xacro:arg name="namespace" default="flygripper" />
+    <xacro:arg name="use_sim" default="false" />
+
     <!-- Include common files -->
-    <xacro:include filename="$(find flygripper_description)/urdf/common.xacro" />
-    <xacro:include filename="$(find flygripper_description)/urdf/materials.xacro" />
+    <xacro:include filename="common.xacro" />
+    <xacro:include filename="materials.xacro" />
 
     <!-- CONSTANT -->
     <xacro:property name="namespace" value="$(arg namespace)" />
