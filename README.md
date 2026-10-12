@@ -126,7 +126,9 @@ RViz 默认显示机器人、里程计和参考路径；参考路径需要任务
 
 ```bash
 source /opt/ros/noetic/setup.bash
-catkin_make -j2 -l2 -DCMAKE_BUILD_TYPE=Release
+catkin config --init --extend /opt/ros/noetic --merge-devel \
+  -j2 -l2 --cmake-args -DCMAKE_BUILD_TYPE=Release
+catkin build -j2 -p1 -l2
 ```
 
 随后分别在三个终端中、仓库根目录执行：
@@ -194,7 +196,7 @@ Docker 运行涉及以下源码适配：
 |---|---|---|
 | 编译入口 | `src/CMakeLists.txt` | 将 XSym 占位文本替换为标准 catkin 入口 |
 | 编译依赖 | `poly_planner`、Gazebo 插件、`fake_mavros` 的 CMake | 明确生成消息与编译目标之间的依赖 |
-| 文件筛选 | actuator、catkin_simple 的 CMake | 避免 AppleDouble 元数据参与编译；与 Docker 源码同步过滤部分重复 |
+| 文件筛选 | actuator、catkin_simple 的 CMake | 避免 AppleDouble 元数据参与编译 |
 | RViz 依赖 | `rviz_plugins` 的 CMake/package.xml | 移除源码未使用的 `multi_map_server` 依赖声明；保留地图显示代码 |
 | 模型加载 | `flygripper.xacro`、`flygripper_base.xacro` | 使用相对包含路径，设置 `namespace` 和 `use_sim` 的默认值 |
 | 旋翼初始化 | `gazebo_rotor_plugin.hpp` | 读取时间常数后再构造滤波器 |
@@ -238,9 +240,11 @@ Docker 运行涉及以下源码适配：
 
 ## 修改后如何生效
 
-Docker 使用独立的源码、构建和产物卷。Mac 的 `src` 只读挂载到 `/host-src`，再由 `build.sh` 同步至实际编译的 `/ws/src`。已有构建成功标记时，重启会复用卷内源码和产物。
+仓库以可写方式挂载到容器 `/ws`，容器 `/ws/src` 与主机 `src` 是同一份源码。两端编辑立即互相可见，主机 Git 可以直接追踪容器内的修改。`catkin_build`、`catkin_devel`、`catkin_config` 使用 Linux 命名卷保存编译缓存、产物和构建配置。编译工具统一为 `catkin build`。
 
-修改 C++、URDF 或包内配置后，推荐：
+文件共享不等于重新编译：C++ 修改后需执行 `build` 并重启；URDF、launch 和参数修改后重启仿真即可加载。
+
+修改 C++ 后，或需要重新编译工作区时，执行：
 
 ```bash
 ./docker/sim.sh stop

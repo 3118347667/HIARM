@@ -25,8 +25,8 @@
 #ifndef GEO_UTILS_HPP
 #define GEO_UTILS_HPP
 
-#include "quickhull.hpp"
-#include "sdlp.hpp"
+#include "gcopter/quickhull.hpp"
+#include "gcopter/sdlp.hpp"
 
 #include <Eigen/Eigen>
 
@@ -47,7 +47,8 @@ namespace geo_utils
 
         Eigen::MatrixX4d A(m, 4);
         Eigen::VectorXd b(m);
-        Eigen::Vector4d c, x;
+        Eigen::Vector4d c;
+        Eigen::VectorXd x;
         const Eigen::ArrayXd hNorm = hPoly.leftCols<3>().rowwise().norm();
         A.leftCols<3>() = hPoly.leftCols<3>().array().colwise() / hNorm;
         A.rightCols<1>().setConstant(1.0);
@@ -55,7 +56,7 @@ namespace geo_utils
         c.setZero();
         c(3) = -1.0;
 
-        const double minmaxsd = sdlp::linprog<4>(c, A, b, x);
+        const double minmaxsd = sdlp::linprog(c, A, b, x);
         interior = x.head<3>();
 
         return minmaxsd < 0.0 && !std::isinf(minmaxsd);
@@ -69,7 +70,8 @@ namespace geo_utils
         const int m = hPoly0.rows();
         const int n = hPoly1.rows();
         Eigen::MatrixX4d A(m + n, 4);
-        Eigen::Vector4d c, x;
+        Eigen::Vector4d c;
+        Eigen::VectorXd x;
         Eigen::VectorXd b(m + n);
         A.leftCols<3>().topRows(m) = hPoly0.leftCols<3>();
         A.leftCols<3>().bottomRows(n) = hPoly1.leftCols<3>();
@@ -79,7 +81,7 @@ namespace geo_utils
         c.setZero();
         c(3) = -1.0;
 
-        const double minmaxsd = sdlp::linprog<4>(c, A, b, x);
+        const double minmaxsd = sdlp::linprog(c, A, b, x);
 
         return minmaxsd < -eps && !std::isinf(minmaxsd);
     }
@@ -87,7 +89,7 @@ namespace geo_utils
     struct filterLess
     {
         inline bool operator()(const Eigen::Vector3d &l,
-                               const Eigen::Vector3d &r)
+                               const Eigen::Vector3d &r) const
         {
             return l(0) < r(0) ||
                    (l(0) == r(0) &&

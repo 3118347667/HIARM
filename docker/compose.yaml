@@ -3,27 +3,40 @@ services:
   sim:
     build:
       context: .
+      args:
+        HTTP_PROXY: ${HIARM_PROXY_URL-http://host.docker.internal:7897}
+        HTTPS_PROXY: ${HIARM_PROXY_URL-http://host.docker.internal:7897}
     image: hiarm:noetic-arm64
     platform: linux/arm64
     container_name: hiarm-sim
+    hostname: hiarm-sim
     init: true
     shm_size: 1gb
     environment:
       HIARM_GUI: ${HIARM_GUI:-false}
       HIARM_DESKTOP: ${HIARM_DESKTOP:-false}
       HIARM_MISSION: ${HIARM_MISSION:-original}
+      HTTP_PROXY: ${HIARM_PROXY_URL-http://host.docker.internal:7897}
+      HTTPS_PROXY: ${HIARM_PROXY_URL-http://host.docker.internal:7897}
+      http_proxy: ${HIARM_PROXY_URL-http://host.docker.internal:7897}
+      https_proxy: ${HIARM_PROXY_URL-http://host.docker.internal:7897}
+      NO_PROXY: localhost,127.0.0.1,::1,hiarm-sim,sim,host.docker.internal
+      no_proxy: localhost,127.0.0.1,::1,hiarm-sim,sim,host.docker.internal
     ports:
       - "127.0.0.1:6080:6080"
       - "127.0.0.1:8080:8080"
     volumes:
       - ../:/ws
-      - ../src:/host-src:ro
-      - source:/ws/src
-      - build:/ws/build
-      - devel:/ws/devel
+      - catkin_build:/ws/build
+      - catkin_devel:/ws/devel
+      - catkin_config:/ws/.catkin_tools
+      - vscode_server:/root/.vscode-server
+      - codex_data:/root/.codex
     working_dir: /ws
     command: ["bash", "docker/start.sh"]
 volumes:
-  source:
-  build:
-  devel:
+  catkin_build:
+  catkin_devel:
+  catkin_config:
+  vscode_server:
+  codex_data:

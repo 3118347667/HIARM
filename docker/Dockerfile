@@ -10,11 +10,12 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     build-essential python3-catkin-tools python3-numpy python3-scipy \
     ros-noetic-gazebo-ros-pkgs ros-noetic-rviz ros-noetic-xacro \
     ros-noetic-mavros-msgs ros-noetic-realtime-tools ros-noetic-joy \
-    ros-noetic-tf ros-noetic-tf2-ros ros-noetic-robot-state-publisher \
+    ros-noetic-tf ros-noetic-tf2-ros ros-noetic-robot-state-publisher ros-noetic-vrpn \
     libeigen3-dev qtbase5-dev xvfb x11vnc novnc websockify openbox \
     xterm tint2 wmctrl x11-xserver-utils adwaita-icon-theme mesa-utils curl ca-certificates && break; \
     if [ "$attempt" = 5 ]; then exit 1; fi; sleep 2; done
 ENV DISPLAY=:1 LIBGL_ALWAYS_SOFTWARE=1 QT_X11_NO_MITSHM=1
 ENV GAZEBO_MODEL_DATABASE_URI=""
+ENV PATH="/root/.codex/bin:${PATH}"
 WORKDIR /ws
 CMD ["bash"]

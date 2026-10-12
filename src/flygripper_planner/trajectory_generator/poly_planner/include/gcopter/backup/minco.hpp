@@ -25,7 +25,7 @@
 #ifndef MINCO_HPP
 #define MINCO_HPP
 
-#include "trajectory.hpp"
+#include "flygripper_common/trajectory/polynomial_trajectory.hpp"
 
 #include <Eigen/Eigen>
 
@@ -34,6 +34,9 @@
 
 namespace minco
 {
+
+template <int Dim, int Order>
+using Trajectory = flygripper_common::PolynomialTrajectory<Dim, Order>;
 
 // The banded system class is used for solving
 // banded linear system Ax=b efficiently.
@@ -284,7 +287,7 @@ class MINCO_S2NU
     return;
   }
 
-  inline void getTrajectory(Trajectory<3> &traj) const
+  inline void getTrajectory(Trajectory<3, 3> &traj) const
   {
     traj.clear();
     traj.reserve(N);

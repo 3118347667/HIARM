@@ -121,6 +121,7 @@ HIARM_DESKTOP=true HIARM_GUI=true ./docker/sim.sh mission
 | `HIARM_DESKTOP` | `false` | 启动 Openbox、tint2 任务栏、x11vnc、websockify，并自动打开配置好的 RViz |
 | `HIARM_GUI` | `false` | 传给 `sim.launch` 的 `gui` 参数，控制自动启动 Gazebo GUI |
 | `HIARM_MISSION` | `original` | 选择世界及任务参数覆盖文件 |
+| `HIARM_PROXY_URL` | `http://host.docker.internal:7897` | 容器及镜像构建中的 HTTP/HTTPS 代理；设为空字符串关闭代理 |
 
 布尔开关使用小写 `true` / `false`；脚本按字符串 `true` 判断。
 
@@ -186,7 +187,7 @@ HIARM_DESKTOP=false HIARM_GUI=false ./docker/sim.sh start
 | `restart` | 重启现有 `sim` 容器，继续使用它已有的环境变量 | 是；不会应用新 Compose 环境或新镜像 |
 | `mission` | 强制 `original`，重新创建容器，等待编译成功，再执行 `mission.py` | 是，并自动执行完整任务 |
 | `demo` | 强制 `demo`，重新创建容器，等待编译成功，再执行 `verify.py` | 是，并自动执行短演示 |
-| `build` | 构建镜像，在临时容器内同步源码并执行 catkin 编译 | 不负责重启正在运行的仿真 |
+| `build` | 构建镜像，在临时容器内直接编译共享源码 | 不负责重启正在运行的仿真 |
 | `stop` | `compose down`，停止并移除容器及项目网络 | 当前仿真结束；保留镜像及命名卷 |
 | `logs` | 跟随 Compose 容器标准输出 | 否 |
 | `shell` | 进入现有容器，加载工作区环境 | 否 |
@@ -229,13 +230,20 @@ HIARM_DESKTOP=false HIARM_GUI=false ./docker/sim.sh start
 8. 启动 `virtual_rc.py` 和 `web_server.py`，网页开始接收实时场景数据。
 9. 脚本等待 roslaunch 或网页服务退出；收到退出信号时清理相关子进程。
 
-`build.sh` 先同步 Linux 源码副本、删除旧成功标记，再执行：
+`build.sh` 删除旧成功标记，初始化配置卷中的 profiles 目录，然后直接编译 `/ws/src` 中的共享源码：
 
 ```bash
-catkin_make -j2 -l2 -DCMAKE_BUILD_TYPE=Release
+catkin config --init --extend /opt/ros/noetic \
+  --source-space /ws/src --build-space /ws/build --devel-space /ws/devel \
+  --log-space /ws/build/logs --merge-devel --no-install \
+  -j2 -l2 --cmake-args -DCMAKE_BUILD_TYPE=Release -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+catkin build -j2 -p1 -l2 --no-status --summarize
+python3 docker/merge-compile-commands.py
 ```
 
-`-j2` 限制并行编译作业，`-l2` 限制调度新作业时的负载；构建成功后才重新生成标记。**成功标记不会自动检测源码变化。**
+`catkin build` 为各包分别配置和编译；`--merge-devel` 将产物汇集到 `/ws/devel`，现有 `devel/setup.bash` 和插件路径继续使用。`-j2` 限制最多两个编译作业，`-p1` 每次构建一个包，`-l2` 限制调度新作业时的负载。构建成功后才重新生成标记；成功标记不会自动检测源码变化。
+
+构建配置保存在 `/ws/.catkin_tools`，分包日志保存在 `/ws/build/logs`。共享源码中的 `._*.msg` 是 macOS 元数据，会导致消息生成器报编码错误，已从消息目录移除；`.gitignore` 排除新增的 `._*` 文件。进入容器后可以运行 `catkin build -j2 -p1 -l2`，复用已保存的路径和 CMake 配置；从主机执行 `./docker/sim.sh build` 则统一应用上述配置并更新成功标记。
 
 ### 5.3 点击任务按钮后的流程
 
@@ -276,15 +284,141 @@ HTTP 控制接口只提供任务启动、暂停和恢复等固定操作，并检
 
 | 挂载 | 用途 |
 |---|---|
-| 仓库根目录 → `/ws` | 脚本、配置、网页和日志与 Mac 共享 |
-| 宿主机 `src` → `/host-src:ro` | 宿主机源码只读输入 |
-| 命名卷 `source` → `/ws/src` | 真正参与编译的 Linux 源码副本，覆盖根目录挂载中的同名路径 |
-| 命名卷 `build` → `/ws/build` | catkin 构建缓存 |
-| 命名卷 `devel` → `/ws/devel` | 编译产物、环境设置及构建成功标记 |
+| 仓库根目录 → `/ws`（可写） | 源码、脚本、配置、网页和日志与主机共享；容器 `/ws/src` 直接对应主机 `src` |
+| 命名卷 `catkin_build` → `/ws/build` | 各包独立的构建缓存及 `logs/` 编译日志 |
+| 命名卷 `catkin_devel` → `/ws/devel` | 合并的编译产物、环境设置及构建成功标记 |
+| 命名卷 `catkin_config` → `/ws/.catkin_tools` | catkin_tools 工作区与 profile 配置 |
+| 命名卷 `vscode_server` → `/root/.vscode-server` | VS Code Server、容器端插件及其用户数据 |
+| 命名卷 `codex_data` → `/root/.codex` | Codex CLI、账号登录状态、配置及会话 |
 
-`sync-source.py` 同步 `/host-src` 至 `/ws/src`，排除 `._*`、`.DS_Store` 和 `cmake-build-debug`，也会删除副本中源目录已不存在的文件。因此应在 **Mac 的 src 中修改源文件**，不要把长期修改只留在容器源码副本中。
+主机和容器直接编辑同一份文件，不再需要复制源码。容器内对 `/ws/src` 的修改或删除也会立即作用于主机仓库，可在主机使用 Git 查看差异。编译产物和工具配置保存在上述命名卷内，避免写入主机源码目录。
+
+从旧配置迁移时，先导出旧容器的 `/ws/src` 并合并其中独有的修改，再重新创建容器。旧的 `hiarm_source` 卷不再被挂载。迁移到 `catkin build` 后使用新的 `hiarm_catkin_build`、`hiarm_catkin_devel` 和 `hiarm_catkin_config` 卷；旧 `hiarm_build`、`hiarm_devel` 保留，不与新工具混用缓存。
 
 `stop` 和任务重新创建容器不会清空命名卷。日志在宿主机 `docker/logs` 中，但固定文件名可能被下一轮覆盖；要保留某轮结果，请先复制到单独目录。不要把删除卷当作普通重启步骤。
+
+### 6.3 使用 VS Code 在容器中开发
+
+1. 在主机 VS Code 中安装 **Dev Containers**（`ms-vscode-remote.remote-containers`）。
+2. 执行 `./docker/sim.sh start` 启动容器。
+3. 打开 VS Code 命令面板，执行 **Dev Containers: Attach to Running Container...**，选择 `hiarm-sim`，打开 `/ws`。
+4. 在扩展面板中，将需要在容器中运行的 Python、C/C++ 等插件安装到容器。主题和图标等界面插件继续使用本机安装。
+
+容器终端中编译：
+
+```bash
+cd /ws
+bash docker/build.sh
+source devel/setup.bash
+```
+
+容器端插件安装在 `hiarm_vscode_server` 命名卷中。`stop`、`demo`、`mission` 重新创建容器后会保留插件；重新连接容器即可继续开发。删除该卷会清除容器端 VS Code 数据。Mac 插件目录不直接挂载到容器，插件由 VS Code 安装适用于 Linux ARM64 的版本。
+
+本项目使用的开发插件：
+
+| 插件 ID | 用途 |
+|---|---|
+| `ms-vscode.cpptools` | C++ 控制器、Gazebo 插件的补全、跳转和调试界面 |
+| `ms-python.python`、`ms-python.vscode-pylance` | Python 解释器选择、补全和类型分析 |
+| `ms-python.debugpy@2024.2.0` | 支持容器 Python 3.8 的断点调试；保留此版本 |
+| `Ranch-Hand-Robotics.rde-ros-1` | ROS 1 工作区、消息文件、节点和 launch 开发 |
+| `redhat.vscode-xml` | launch、Xacro、world、package.xml 编辑 |
+| `redhat.vscode-yaml` | Compose、控制参数和任务计划编辑 |
+| `twxs.cmake` | CMakeLists.txt 语法和补全；编译使用 `docker/build.sh` |
+| `timonwong.shellcheck` | Shell 脚本静态检查 |
+| `deyuf.urdf-studio` | URDF/Xacro 模型预览 |
+| `mhutchie.git-graph` | 查看分支和提交历史 |
+
+Python 解释器选择 `/usr/bin/python3`，补全搜索路径包含 `/opt/ros/noetic/lib/python3/dist-packages` 和 `/ws/devel/lib/python3/dist-packages`。ROS 插件的 `ros.rosSetupScript` 设为 `/ws/devel/setup.bash`，加载当前工作区。Python Debugger 的版本依据其[官方兼容表](https://github.com/microsoft/vscode-python-debugger#limited-support-for-deprecated-python-versions)选择。
+
+#### C++ 代码跳转
+
+`build.sh` 启用 `CMAKE_EXPORT_COMPILE_COMMANDS=ON`。各包生成 `/ws/build/<包名>/compile_commands.json`，构建后由 `merge-compile-commands.py` 合并为 `/ws/build/compile_commands.json`，包含实际使用的头文件路径、宏和编译选项。
+
+在 **Preferences: Open Remote Settings (JSON)** 中配置：
+
+```json
+{
+  "C_Cpp.default.compileCommands": ["/ws/build/compile_commands.json"],
+  "C_Cpp.default.compilerPath": "/usr/bin/g++",
+  "C_Cpp.default.intelliSenseMode": "linux-gcc-arm64"
+}
+```
+
+在容器窗口中打开 `/ws`，对符号使用 F12 跳转定义。新增源文件或修改 CMake 后执行 `bash docker/build.sh` 更新数据库；单独执行 `catkin build` 后，再运行 `python3 docker/merge-compile-commands.py`。数据库保存在构建卷中，不提交到 Git。
+
+没有加入 CMake 目标的 `.cpp`（例如控制器的 `test.cpp`），以及带有 `CATKIN_IGNORE` 的包，不会出现在编译数据库中。C/C++ 扩展对这些文件使用 `/ws/.vscode/c_cpp_properties.json` 中的后备配置。该文件是本地编辑器设置，不提交到 Git。
+
+后备 `includePath` 应填写实际的头文件根目录，包括各包的 `include`、`devel/include`、`/opt/ros/noetic/include`、`/opt/ros/noetic/include/xmlrpcpp` 和 `/usr/include/eigen3`。第三方库路径可参照同类文件的编译数据库记录：执行器需要 `external/feetech_servo`，RViz 需要 Qt5 和 OGRE，Gazebo 需要 Gazebo、Ignition、SDFormat 等目录。不要只依赖 `/usr/include/**`。Qt 文件还需要 `compilerArgs: ["-fPIC"]` 和 `defines: ["QT_NO_KEYWORDS"]`；工作区后备语言标准使用 C++17。
+
+容器镜像包含 `ros-noetic-vrpn` 开发依赖；已有容器可运行 `apt-get install -y --no-install-recommends ros-noetic-vrpn` 补齐 VRPN 头文件。
+
+### 6.4 在容器中使用 Codex
+
+容器终端安装 CLI（默认版本 `0.151.0`，可用脚本第一个参数指定版本）：
+
+```bash
+bash /ws/docker/install-codex.sh
+codex --version
+```
+
+首次复用 Mac 当前账号，在 **Mac 终端**执行：
+
+```bash
+docker exec hiarm-sim install -d -m 700 /root/.codex
+docker cp "$HOME/.codex/auth.json" hiarm-sim:/root/.codex/auth.json
+docker exec hiarm-sim chmod 600 /root/.codex/auth.json
+docker exec hiarm-sim codex login status
+```
+
+这是官方支持的[向容器复制登录缓存](https://learn.chatgpt.com/docs/auth#fallback-authenticate-locally-and-copy-your-auth-cache)方式。凭据保存在 `hiarm_codex_data` 卷中，不放进仓库或镜像。CLI 与容器端 Codex 扩展共享该登录状态；平时重建容器无需再次复制。
+
+在容器终端进入项目后使用：
+
+```bash
+cd /ws
+codex
+```
+
+VS Code 中将 **Codex**（`openai.chatgpt`）安装到容器，重新加载容器窗口后打开 Codex 面板。CLI 与 VS Code 插件分别更新：CLI 执行安装脚本，插件在扩展面板更新。
+
+当前 Docker 默认配置会阻止 bubblewrap 创建命名空间，表现为能对话但执行命令时报 `No permissions to create a new namespace`。安装脚本首次创建 `/root/.codex/config.toml`，使用文件登录缓存并启用 Landlock 沙箱：
+
+```toml
+cli_auth_credentials_store = "file"
+
+[features]
+use_legacy_landlock = true
+```
+
+已有配置时，安装脚本保留原内容；需将上述设置合并进去。本次已在容器中设置并验证只读命令可执行、沙箱外写入被拒绝。该兼容选项已被 Codex 标记为弃用，升级后若移除此选项，需要重新检查沙箱兼容性。
+
+当前验证通过的是 CLI `0.151.0`。扩展 `26.51007.21434` 自带的 `0.162.0-alpha.17.2` 后端可以登录和对话，但执行代码命令仍报 `filesystem-restricted execution requires bubblewrap to isolate app-server sockets`；Landlock 兼容设置不能解决这个新版后端问题。当前在 VS Code 的容器终端中运行 `codex` 进行代码操作。
+
+### 6.5 使用 Mac 主机代理
+
+Compose 默认将容器的 `HTTP_PROXY`、`HTTPS_PROXY` 及小写同名变量设为 `http://host.docker.internal:7897`。`host.docker.internal` 指向 Mac 主机；容器中的 `127.0.0.1` 指向容器自身。
+
+`NO_PROXY`/`no_proxy` 排除 localhost、`127.0.0.1`、`::1`、`hiarm-sim`、`sim` 和 `host.docker.internal`。容器主机名固定为 `hiarm-sim`，使 ROS 发布的本地节点地址绕过代理。
+
+更换代理端口或关闭代理后，用 `start` 重新创建服务使环境变量生效：
+
+```bash
+HIARM_PROXY_URL=http://host.docker.internal:7890 ./docker/sim.sh start
+HIARM_PROXY_URL= ./docker/sim.sh start
+```
+
+这些临时赋值只影响本次命令；后续 `demo`/`mission` 重建容器时也要传入相同值。主机代理软件需要保持运行。
+
+容器中检查外网和本地 ROS：
+
+```bash
+curl -I https://github.com
+source /ws/devel/setup.bash
+rosnode ping -c 1 /gazebo
+```
+
+Compose 的构建参数覆盖 Dockerfile 中的下载命令；`docker pull` 和 `FROM` 镜像拉取使用 Docker Desktop 自身的网络/代理设置。
 
 ## 7. WebGL、noVNC 与 RViz
 
@@ -474,7 +608,8 @@ docker exec -d hiarm-sim bash /ws/docker/open-window.sh gazebo
 | `web/app.js`、页面样式 | 刷新网页；若仍用缓存可强制刷新 |
 | `docker/hiarm.rviz` | RViz 内重新加载配置，或关闭 RViz 后从快捷入口打开 |
 | `docker/sim.launch`、现成 YAML/world | 重启仿真后重新加载 |
-| 宿主机 `src` 中的 C++、URDF、launch 或参数 | 先同步/构建，再重新启动，不能只改宿主机后 `restart` |
+| 主机或容器内的 `src` C++ 文件 | 两端立即看到修改；执行 `build` 后重启，加载新编译产物 |
+| `src` 中的 URDF、launch 或参数 | 重启仿真后重新加载；新增消息、修改 CMake 或包依赖时还需构建 |
 | `match_scene.py` / `make_grasp_plan.py` | 先重新生成输出文件，再重启；启动脚本不会自动运行生成器 |
 
 修改项目源码后的完整操作：
@@ -491,13 +626,11 @@ HIARM_DESKTOP=true HIARM_GUI=true ./docker/sim.sh start
 
 ```bash
 python3 docker/match_scene.py
-# 若宿主机 src 刚有修改，先同步，让生成器读取最新的 Linux 源码副本
-docker exec hiarm-sim python3 docker/sync-source.py
 docker exec hiarm-sim bash -c 'source devel/setup.bash && python3 docker/make_grasp_plan.py'
 HIARM_DESKTOP=true HIARM_GUI=true ./docker/sim.sh mission
 ```
 
-`match_scene.py` 可在 Mac 用标准库 Python 运行；`make_grasp_plan.py` 使用容器内的 PyYAML。不要只手改生成文件而忘记生成器，下次生成会覆盖它。同步源码不代替 C++ 编译。
+`match_scene.py` 可在 Mac 用标准库 Python 运行；`make_grasp_plan.py` 使用容器内的 PyYAML。不要只手改生成文件而忘记生成器，下次生成会覆盖它。C++ 修改仍需重新编译。
 
 ## 10. 报告、日志与故障排查
 
@@ -571,7 +704,7 @@ Compose 日志主要是容器启动输出。ROS/Gazebo 的详细输出已重定�
 | RViz 空白 | 从快捷入口加载 hiarm.rviz；检查 bridge 日志、Fixed Frame、模型参数及 TF 前缀 |
 | RViz 没有路径 | 初始待机尚未生成参考路径，启动任务后才可能显示 |
 | RViz 看不到罐子和支撑柱 | 当前 RViz 只配置机器人和 ROS 轨迹；完整世界请用 Gazebo/WebGL |
-| 修改源码无变化 | `/ws/src` 是命名卷副本；同步/构建并重启，不要仅重启旧编译产物 |
+| 修改源码后运行效果无变化 | 文件已共享；C++ 需构建后重启，模型/参数需重启加载。旧容器需用 start 重新创建以应用新挂载 |
 | 任务完成后不能再次启动 | 先 restart；start 在配置未变时不保证清空已有仿真 |
 | 暂停后恢复，任务却显示超时 | 暂停期间任务超时仍按墙钟计时；用 mission 重启整轮任务 |
 | mission 命令成功退出，但没有完成四次抓取 | 当前退出码没有纳入抓取/稳定性评价；检查 mission.json 中的 all_transfers_verified 和 grasp_and_stability_verified |
@@ -647,7 +780,7 @@ Compose 日志主要是容器启动输出。ROS/Gazebo 的详细输出已重定�
 | `compose.yaml` | 服务、开关、端口、卷与启动命令 |
 | `sim.sh` | Mac 端管理入口 |
 | `start.sh` | 容器服务编排、显示初始化、子进程清理 |
-| `build.sh`、`sync-source.py` | 同步源码及 catkin 编译 |
+| `build.sh` | 配置 catkin_tools、用 catkin build 编译共享源码并更新成功标记 |
 | `sim.launch` | Gazebo、机器人、模拟飞控、控制器和规划器配置 |
 | `virtual_rc.py` | 仿真遥控输入 |
 | `mission.py`、`verify.py` | 完整任务执行/记录、短演示执行/记录 |
