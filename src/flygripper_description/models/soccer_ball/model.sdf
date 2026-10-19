@@ -1,0 +1,36 @@
+<?xml version="1.0" ?>
+<sdf version="1.5">
+  <model name="soccer_ball">
+    <static>false</static>
+    <link name="soccer_ball_link">
+      <pose>0 0 0 0 0 0</pose>
+      <inertial>
+        <mass>0.2</mass>
+        <!-- inertia based on solid sphere 2/5 mr^2 -->
+        <inertia>
+          <ixx>2e-4</ixx>
+          <iyy>2e-4</iyy>
+          <izz>2e-4</izz>
+          <ixy>0</ixy>
+          <ixz>0</ixz>
+          <iyz>0</iyz>
+        </inertia>
+      </inertial>
+      <collision name="collision">
+        <geometry>
+          <sphere>
+            <radius>0.05</radius>
+          </sphere>
+        </geometry>
+      </collision>
+      <visual name="visual">
+        <geometry>
+          <mesh>
+            <scale>0.05 0.05 0.05</scale>
+            <uri>model://soccer_ball/meshes/ball.dae</uri>
+          </mesh>
+        </geometry>
+      </visual>
+    </link>
+  </model>
+</sdf>

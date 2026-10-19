@@ -1,0 +1,60 @@
+geometric_controller: # hover version
+  acc_cutoff_freq: 5.0
+  omega_cutoff_freq: 5.0
+  rotor_cutoff_freq: 5.0
+  ctrl_omega_xy_cutoff_freq: 20.0
+  ctrl_omega_z_cutoff_freq: 9.0
+  indi_acc_cutoff_freq: 8.0
+  indi_alpha_cutoff_freq: 8.0
+
+  # k_pos: {x: 3.0, y: 3.0, z: 3.0}
+  # k_pos: {x: 2.5, y: 3.0, z: 3.0}
+  # k_pos: {x: 5.0, y: 5.0, z: 3.0}
+  # k_vel: {x: 3.5, y: 3.5, z: 3.5}
+  #k_pos: {x: 3.0, y: 3.0, z: 3.0}
+  #k_pos: {x: 4.0, y: 4.0, z: 3.0}
+
+  # k_pos: {x: 4.5, y: 4.5, z: 3.5}
+  k_pos: {x: 3.0, y: 3.0, z: 2.5} # bottle
+  # k_pos: {x: 2.5, y: 2.5, z: 4.75} # bottle
+  # k_pos: {x: 3.0, y: 3.0, z: 3.5} # ballon
+
+  k_vel: {x: 4.0, y: 4.0, z: 2.5} # bottle
+  # k_vel: {x: 2.5, y: 2.5, z: 4.7} # bottle
+  # k_vel: {x: 2, y: 2, z: 3.5} # ballon
+
+  k_att: {x: 7.0, y: 7.0, z: 3.0}     #{x: 12.0, y: 12.0, z: 8.0}
+  #k_omega: {x: 12.0, y: 12.0, z: 6.0} #{x: 8.0, y: 9.0, z: 3.5}
+  k_omega: {x: 8.0, y: 9.0, z: 3.5}
+
+  kd_omega: {x: 0.0, y: 0.0, z: 0.0}
+  # kd_omega: {x: 0.05, y: 0.05, z: 0.05}  # {x: 0.1, y: 0.1, z: 0.05}
+  ki_omega: {x: 0.0, y: 0.0, z: 0.3}
+  ki_omega_max: {x: 0.0, y: 0.0, z: 30.0}
+
+  ff_omega: {x: 0.016, y: -0.049, z: 0.0}
+
+  pos_err_bound: {x: 0.5, y: 0.5, z: 0.5}
+  vel_err_bound: {x: 1.0, y: 1.0, z: 1.0}
+
+  L1_force_bound: {x: 4.0, y: 4.0, z: 4.0}
+  L1_torque_bound: {x: 0.1, y: 0.1, z: 0.1}
+  INDI_force_bound: {x: 4.0, y: 4.0, z: 4.0}
+  INDI_torque_bound: {x: 0.1, y: 0.1, z: 0.1}
+  tact_force_bound: {x: 0.0, y: 0.0, z: 4.0}
+  tact_torque_bound: {x: 0.0, y: 0.0, z: 0.0}
+
+  acc_compensation: 2 # 0: NONE, 1: INDI, 2: L1, 3: TACT
+  alpha_compensation: 0 # 0: NONE, 1: INDI, 2: L1, 3: TACT
+
+  feedback_linearization: false
+  thrust_projection: false
+  tilt_prioritization: false
+
+  As_v: -3.0
+  As_omega: -10.0
+  thrust_flt1_cutoff_freq: 10.0
+  torque_flt1_cutoff_freq: 5.0
+  torque_flt2_cutoff_freq: 15.0
+
+  magic_number: 0

@@ -1,0 +1,2 @@
+SUBSYSTEM=="video4linux", ENV{ID_PATH}=="platform-fc800000.usb-usb-0:1.2:1.0", ATTR{index}=="0", SYMLINK+="camera_front", MODE="0666"
+SUBSYSTEM=="video4linux", ENV{ID_PATH}=="platform-fc880000.usb-usb-0:1.1:1.0", ATTR{index}=="0", SYMLINK+="camera_mid", MODE="0666"

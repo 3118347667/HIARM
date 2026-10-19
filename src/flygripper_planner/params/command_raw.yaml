@@ -1,0 +1,76 @@
+# plan piece length should be smaller than this
+piece_length: 3.0
+
+# morphing settings
+morph_shrink_pos: -12.5 # shrink angle position
+morph_expand_pos: 0.0 # expand angle position
+
+# command setting
+# waypoints_x:
+#   p0, p1, p2 ..., pn: waypoints
+#   plan_speed, plan_acc: initial speed and acc
+#   plan_heading_mode: planning heading mode
+#   plan_tolerance: planning goal tolerance
+
+#   morph_action: 0: idle, 1: expanding, 2: shrinking
+#   morph_trigger: 0: start with planning, 1: after reach goal
+#   morph_tolerance: morph goal tolerance
+
+waypoints_0:
+  p0: {x: 0.2, y: 1.505, z: 0.900} # flying to a hovering point
+  plan_speed: 0.5
+  plan_acc: 0.5
+  plan_heading_mode: 0
+  plan_tolerance: 0.1
+  morph_action: 1  # expanding
+  morph_trigger: 0 # start with planning
+  morph_tolerance: 0.1
+waypoints_1:
+  p0: {x: 1.385, y: 1.505, z: 0.900} # flying towards and GRASPING the object
+  plan_speed: 0.5
+  plan_acc: 0.5
+  plan_heading_mode: 0
+  plan_tolerance: 0.25 # BIG to accelerate morph trigger
+  morph_action: 2  # shrinking
+  morph_trigger: 1 # after reach goal
+  morph_tolerance: 2.0 # BIG to accelerate next stage plan
+waypoints_2:
+  p0: { x: 2.785, y: 1.505, z: 0.900 } # flying upwards
+  # p1: { x: 3.62, y: -0.20, z: 1.72 } # flying forwards
+  plan_speed: 0.5
+  plan_acc: 0.5
+  plan_heading_mode: 0
+  plan_tolerance: 0.1
+  morph_action: 1  # expanding
+  morph_trigger: 1 # after reach goal
+  morph_tolerance: 0.1 # morph angle tolerance
+
+# waypoints_0:
+#   p0: {x: -0.2, y: 1.495, z: 0.900} # flying to a hovering point
+#   plan_speed: 0.5
+#   plan_acc: 0.5
+#   plan_heading_mode: 0
+#   plan_tolerance: 0.05
+#   morph_action: 1  # expanding
+#   morph_trigger: 0 # start with planning
+#   morph_tolerance: 0.1
+# waypoints_1:
+#   p0: {x: 0.385, y: 1.495, z: 0.900} # flying towards and GRASPING the object
+#   plan_speed: 0.5
+#   plan_acc: 0.5
+#   plan_heading_mode: 0
+#   plan_tolerance: 0.25 # BIG to accelerate morph trigger
+#   morph_action: 2  # shrinking
+#   morph_trigger: 1 # after reach goal
+#   morph_tolerance: 2.0 # BIG to accelerate next stage plan
+# waypoints_2:
+#   p0: { x: 1.085, y: 1.495, z: 0.900 } # flying upwards
+#   # p1: { x: 3.62, y: -0.20, z: 1.72 } # flying forwards
+#   plan_speed: 0.5
+#   plan_acc: 0.5
+#   plan_heading_mode: 0
+#   plan_tolerance: 0.05
+#   morph_action: 1  # expanding
+#   morph_trigger: 1 # after reach goal
+#   morph_tolerance: 0.1 # morph angle tolerance
+

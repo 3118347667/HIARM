@@ -1,0 +1,22 @@
+<?xml version="1.0" ?>
+<robot name="coke_can">
+  <link name="coke_can__link">
+    <inertial>
+      <mass value="0.390"/>
+      <origin xyz="0   0   0.06" rpy="0 0 0"/>
+      <inertia ixx="0.00055575" ixy="0" ixz="0" iyy="0.00055575" iyz="0" izz="0.0001755"/>
+    </inertial>
+    <collision name="coke_can__collision">
+      <origin xyz="0.00393  0.00472 -0.18" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://flygripper_description/models/coke_can/meshes/coke_can.dae" scale="1.0 1.0 1.0"/>
+      </geometry>
+    </collision>
+    <visual name="coke_can__visual">
+      <origin xyz="0.00393  0.00472 -0.18" rpy="0 0 0"/>
+      <geometry>
+        <mesh filename="package://flygripper_description/models/coke_can/meshes/coke_can.dae" scale="1.0 1.0 1.0"/>
+      </geometry>
+    </visual>
+  </link>
+</robot>

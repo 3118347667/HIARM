@@ -1,0 +1,93 @@
+<?xml version="1.0"?>
+<launch>
+
+  <arg name="rhosVisibility_"/>
+  <arg name="rhoTracking_"/>
+  <arg name="target_name_"/>
+  <arg name="odom_topic" default="/ekf/ekf_odom"/>
+  <arg name="grasp_height" default="0.09"/>
+  <arg name="rho_grasp" default="0.0"/>
+  <arg name="hold_yaw" default="true"/>
+  <arg name="vmax" default="0.40"/>
+  <arg name="amax" default="0.40"/>
+
+  <node pkg="nodelet" type="nodelet" name="manager" args="manager" output="screen">
+    <param name="num_worker_threads" value="2"/>
+  </node>
+
+  <node pkg="nodelet" type="nodelet" name="planning" args="load planning/Nodelet manager" output="screen">
+    <!-- <remap from="~odom" to="odom"/>  -->
+    <remap from="~odom" to="$(arg odom_topic)"/>
+    <remap from="~heartbeat" to="heartbeat"/>
+    <remap from="~trajectory" to="trajectory"/>
+    <remap from="~replanState" to="replanState"/>
+    <remap from="~target" to="$(arg target_name_)"/>
+    <remap from="~triger" to="/triger"/>
+    <remap from="~land_triger" to="/land_triger"/>
+
+    <param name="plan_hz" value="20"/>
+
+    <param name="K" value="8"/>
+    <param name="vmax" value="$(arg vmax)"/>
+    <param name="amax" value="$(arg amax)"/>
+    <param name="rhoT" value="20.0"/>
+    <param name="rhoP" value="10000.0"/>
+    <param name="rhoV" value="10000.0"/>
+    <param name="rhoA" value="5000.0"/>
+    <param name="rhoTracking" value="$(arg rhoTracking_)"/>
+    <param name="rhosVisibility" value="$(arg rhosVisibility_)"/>
+    <!-- Zero: approach from the current side. Positive: prefer target body -X,
+         rotated by grasp_yaw. This is independent of the aircraft's heading. -->
+    <param name="rhoGrasp" value="$(arg rho_grasp)"/>
+    <param name="hold_yaw_on_trigger" value="$(arg hold_yaw)"/>
+    <param name="post_grasp_lift" value="0.0"/>
+    <param name="theta_clearance" value="0.8"/>
+    <param name="clearance_d" value="0.2"/>
+    <param name="tolerance_d" value="0.02"/>
+
+    <!-- real dist = gtasp_tole_dis * v -->
+    <!-- <param name="grasp_tole_dis" value="0.40"/> -->
+    <param name="grasp_tole_dis" value="0.25"/>
+    <param name="grasp_start_dis" value="0.05"/>
+    <param name="grasp_max_relative_speed" value="0.10"/>
+    <!-- <param name="grasp_yaw" value="0.985"/> -->
+    <param name="grasp_yaw" value="0.0"/>
+
+    <param name="tracking_dist" value="1.0"/>
+
+    <param name="tracking_dur" value="1.5"/>
+    <param name="tracking_dt" value="0.2"/>
+    <param name="debug" value="false"/>
+
+    <!-- <param name="pos_dx" value="0.08"/> -->
+    <!-- <param name="pos_dy" value="0.085"/> -->
+    <!-- <param name="pos_dz" value="-0.01"/> -->
+    <!-- bottle -->
+    <!-- <param name="pos_dx" value="0.060"/> -->
+    <!-- box 0.125 -->
+    <param name="pos_dx" value="0.0"/>
+    <!-- bottle 0.075 -->
+    <param name="pos_dy" value="0.0"/>
+    <!-- y box 0.082 -->
+    <param name="pos_dz" value="$(arg grasp_height)"/>
+    <param name="grasp_vx" value="0.0"/>
+    <param name="grasp_vy" value="0.0"/>
+    <param name="grasp_vz" value="0.0"/>
+    <param name="replan_head_time" value="0.003"/>
+
+    <param name="grasp_position" value="0.0"/>
+    <param name="prediction/rho_a" value="1.0"/>
+    <param name="prediction/vmax" value="4.0"/>
+    <!-- Seconds for smoothing mocap yaw rate; limit is in rad/s. -->
+    <param name="target_yaw_filter_tau" value="0.1"/>
+    <param name="target_yaw_rate_limit" value="3.0"/>
+  </node>
+  <node pkg="planning" name="traj_server" type="traj_server" output="screen">
+    <remap from="~position_cmd" to="position_cmd"/>
+    <remap from="~trajectory" to="trajectory"/>
+    <remap from="~heartbeat" to="heartbeat"/>
+    <param name="time_forward" value="1.0" type="double"/>
+  </node>
+  <node pkg="planning" name="trigger_rc" type="trigger_rc" output="screen">
+  </node>
+</launch>

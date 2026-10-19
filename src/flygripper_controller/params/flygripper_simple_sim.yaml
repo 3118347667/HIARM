@@ -1,0 +1,38 @@
+geometric_controller:
+  acc_cutoff_freq: 12.0
+  omega_cutoff_freq: 12.0
+  rotor_cutoff_freq: 12.0
+
+  ctrl_omega_xy_cutoff_freq: 100.0
+  ctrl_omega_z_cutoff_freq: 100.0
+
+  indi_acc_cutoff_freq: 100.0
+  indi_alpha_cutoff_freq: 100.0
+
+  k_pos: {x: 3.0, y: 3.0, z: 3.0}
+  k_vel: {x: 3.5, y: 3.5, z: 2.0}
+
+  k_att: {x: 12.0, y: 12.0, z: 2.0}   #{x: 12.0, y: 12.0, z: 8.0}
+  k_omega: {x: 9.0, y: 9.0, z: 3.0}   #{x: 9.0, y: 9.0, z: 6.0}
+  kd_omega: {x: 0.0, y: 0.0, z: 0.0}  # {x: 0.1, y: 0.1, z: 0.05}
+  ki_omega: {x: 0.0, y: 0.0, z: 0.3}
+  ki_omega_max: {x: 0.0, y: 0.0, z: 5.0}
+  ff_omega: {x: 0.0, y: 0.0, z: 0.0}
+
+  pos_err_bound: {x: 1.0, y: 1.0, z: 1.0}
+  vel_err_bound: {x: 6.0, y: 6.0, z: 6.0}
+
+  acc_compensation: 0 # 0: NONE, 1: INDI, 2:L1
+  alpha_compensation: 0 # 0: NONE, 1: INDI, 2:L1
+
+  feedback_linearization: false
+  thrust_projection: false
+  tilt_prioritization: false
+
+  As_v: -5.0
+  As_omega: -10.0
+  thrust_flt1_cutoff_freq: 30.0
+  torque_flt1_cutoff_freq: 5.0
+  torque_flt2_cutoff_freq: 15.0
+
+  magic_number: 0 # not used

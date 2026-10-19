@@ -1,0 +1,17 @@
+<package format="2">
+    <name>flygripper_planner</name>
+    <version>0.0.0</version>
+    <description>The flygripper_planner package</description>
+
+    <maintainer email="flygripper0young@gmail.com">jonne</maintainer>
+    <license>TODO</license>
+
+    <buildtool_depend>catkin</buildtool_depend>
+    <depend>roscpp</depend>
+    <depend>geometry_msgs</depend>
+    <depend>visualization_msgs</depend>
+    <depend>flygripper_common</depend>
+    <export>
+        <!--  Other tools can request additional information be placed here  -->
+    </export>
+</package>

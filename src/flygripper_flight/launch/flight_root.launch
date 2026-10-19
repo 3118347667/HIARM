@@ -1,0 +1,14 @@
+<launch>
+    <!-- common parameters -->
+    <arg name="mav_name"           default="flygripper"/>
+    <arg name="use_sim"            default="true"/>
+
+    <arg name="package_name"       default="flygripper_flight"/>
+    <arg name="launch_name"        default="flight_realtime.launch"/>
+
+    <node pkg="flygripper_flight" type="launch_with_root.sh"
+          args="$(arg package_name) $(arg launch_name)
+                $(arg mav_name) $(arg use_sim)"
+          name="flygripper_flight_launcher" output="screen"/>
+
+</launch>

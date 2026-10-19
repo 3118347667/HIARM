@@ -1,0 +1,11 @@
+<launch>
+    <!-- common parameters -->
+    <arg name="mav_name"          default="flygripper"/>
+    <arg name="namespace_prefix"  default="$(arg mav_name)"/>
+
+    <include file="$(find flygripper_actuator)/launch/actuator_root.launch">
+        <arg name="mav_name" value="$(arg mav_name)"/>
+    </include>
+
+<!--    <node name="rqt_gui" pkg="rqt_gui" type="rqt_gui"/>-->
+</launch>

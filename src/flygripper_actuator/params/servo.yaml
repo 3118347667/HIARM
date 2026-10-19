@@ -1,0 +1,24 @@
+# actuator settings
+
+# defined in the launch arguments with root
+#actuator_bus: uart
+#actuator_interface: /dev/FEETECH_SERVO
+baud_rate: 1000000
+
+# TODO: make it vector to support multiple actuators
+# Servo Actuator support
+actuator_id: 1
+actuator_product: feetech_sts3032
+actuator_joint_name: actuator_joint
+
+enable_joint_state_publisher: false
+
+actuators:
+  feetech_sts3032:
+    act2pos: 0.0015339807878856412   # 2*PI/4096
+    act2vel: 0.0015339807878856412 #3.0679615757712826e-05    # 2*PI/4096*(1/50)
+    act2effort: 0.00045     # 0.45/1000
+    effort2act: 2222.2222   # 1/act2effort
+    max_out: 1000           # = 0.45 N*M
+    offset_angle: -3.1415926 # PI
+    # offset_angle: -2.9415926 # PI

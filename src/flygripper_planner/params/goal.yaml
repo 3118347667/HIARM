@@ -1,0 +1,20 @@
+segment_per_distance: 0.3
+
+max_iteration: 300
+min_piece_num: 3
+
+K: 8
+M: 8
+
+rhoT: 1.0
+rhoV: 10.0
+rhoA: 10.0
+rhoDYaw: 1000.0
+
+rhoPAlignmentDistance: 0.0
+rhoPAlignmentAngle: 200.0
+rhoYawAlignmentAngle: 200.0
+
+fix_p: false
+pause_debug: false
+magic_number: 0

@@ -1,0 +1,7 @@
+waypoint_height:           1.0
+terminal_vel:  {x: 0.0, y: 0.0, z: 0.0}
+terminal_acc:  {x: 0.0, y: 0.0, z: 0.0}
+terminal_jerk: {x: 0.0, y: 0.0, z: 0.0}
+allocation_speed:         1.5
+allocation_acc:           2.0
+max_piece_num:             5

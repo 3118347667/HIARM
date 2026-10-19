@@ -1,0 +1,36 @@
+robot_parameter:
+  mass: 0.712 # kg
+  inertia: {x: 0.007, y: 0.007, z: 0.012}  # kg·m^2
+
+  thrust_coeff: 9.374e-08  # N/(round/m)^2
+  moment_coeff: 1.500e-09  # N*m/(round/m)^2
+
+  collective_thrust_min: 1.04596  # ~ 10% gravity [N]
+  collective_thrust_max: 34.86522 # ~ 500% gravity [N]
+  torque_max: {x: 2.0, y: 2.0, z: 0.273}
+  tilt_angle_max: 1.57  # rad 0.5235987756 for 30 degs, 1.0471975512 for 60 degs
+  bodyrates_max: {x: 3.14, y: 3.14, z: 1.57} # 3.14 rad/s = 180 deg/s
+
+  rotor_thrusts_min: [0.26149, 0.26149, 0.26149, 0.26149] # collective_thrust_min / 4 #
+  rotor_thrusts_max: [8.71630, 8.71630, 8.71630, 8.71630]  # collective_thrust_max / 4 #
+  dynamic_mixing: false # enable dynamic G matrix # True
+
+  dshot_rpm_map_method: 0
+  # method 0:
+  dshot_rpm_map_coeff:  [4.389e-02, -5.255e-05, 1.573e-08]
+  # [k0, k1, k2], y = k0 + k1 * x + k2 * x * x
+  # where x is rpm, y is dshot command
+
+  # method 1:
+  dshot_rpm_volt_map_coeff: [0., 0., 0., 0.]
+  #  dshot_rpm_map_volt_file: "/home/charmyoung/flygripper_ws/scripts/data/"
+
+  # method 2:
+  dshot_rpm_volt_map_file: "/home/rock/experiment_ws/data/"
+
+  hover_percentage: 0.3
+
+  rotor0_position: { x: 0.12, y: -0.12 }
+  rotor1_position: { x: -0.12, y: 0.12 }
+  rotor2_position: { x: 0.12, y: 0.12 }
+  rotor3_position: { x: -0.12, y: -0.12 }

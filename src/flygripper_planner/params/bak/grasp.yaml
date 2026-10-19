@@ -1,0 +1,13 @@
+piece_length: 0.5
+allocation_speed: 0.25
+allocation_acc: 0.5
+body_in_odom: {x: -0.08, y: 0.06, z: 0.05}
+actuator_max: 4.0
+auto_morph: true
+
+obj_assign: 2 # 0: odom, 1: pose, 2: parameter
+obj_position: {x: 5.0, y: -2.0, z: 0.2}
+obj_attitude: {w: 1.0, x: 0.0, y: 0.0, z: 0.0}
+
+goal_enable: false
+goal_position: {x: 6.0, y: -1.0, z: 0.5}

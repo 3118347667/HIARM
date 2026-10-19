@@ -1,0 +1,558 @@
+<?xml version='1.0' encoding='UTF-8'?>
+<root>
+ <tabbed_widget parent="main_window" name="Main Window">
+  <Tab tab_name="position" containers="1">
+   <Container>
+    <DockSplitter orientation="-" sizes="0.475962;0.524038" count="2">
+     <DockSplitter orientation="|" sizes="0.33559;0.33559;0.32882" count="3">
+      <DockArea name="...">
+       <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+        <range right="22.339334" left="0.000000" top="7.127928" bottom="1.754966"/>
+        <limitY/>
+        <curve color="#1f77b4" name="/flygripper_simple/geometric_controller/data/position_current/x"/>
+        <curve color="#17becf" name="/flygripper_simple/geometric_controller/data/position_reference/x"/>
+       </plot>
+      </DockArea>
+      <DockArea name="...">
+       <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+        <range right="22.339334" left="0.000000" top="0.416445" bottom="0.288084"/>
+        <limitY/>
+        <curve color="#d62728" name="/flygripper_simple/geometric_controller/data/position_current/y"/>
+        <curve color="#bcbd22" name="/flygripper_simple/geometric_controller/data/position_reference/y"/>
+       </plot>
+      </DockArea>
+      <DockArea name="...">
+       <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+        <range right="22.339334" left="0.000000" top="1.916461" bottom="0.927325"/>
+        <limitY/>
+        <curve color="#1ac938" name="/flygripper_simple/geometric_controller/data/position_current/z"/>
+        <curve color="#1f77b4" name="/flygripper_simple/geometric_controller/data/position_reference/z"/>
+       </plot>
+      </DockArea>
+     </DockSplitter>
+     <DockSplitter orientation="|" sizes="0.33559;0.33559;0.32882" count="3">
+      <DockArea name="...">
+       <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+        <range right="22.339334" left="0.000000" top="0.203098" bottom="-0.334455"/>
+        <limitY/>
+        <curve color="#ff7f0e" name="/flygripper_simple/geometric_controller/data/position_error/x"/>
+       </plot>
+      </DockArea>
+      <DockArea name="...">
+       <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+        <range right="22.339334" left="0.000000" top="0.032315" bottom="-0.079706"/>
+        <limitY/>
+        <curve color="#f14cc1" name="/flygripper_simple/geometric_controller/data/position_error/y"/>
+       </plot>
+      </DockArea>
+      <DockArea name="...">
+       <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+        <range right="22.339334" left="0.000000" top="0.079197" bottom="-0.095028"/>
+        <limitY/>
+        <curve color="#9467bd" name="/flygripper_simple/geometric_controller/data/position_error/z"/>
+       </plot>
+      </DockArea>
+     </DockSplitter>
+    </DockSplitter>
+   </Container>
+  </Tab>
+  <Tab tab_name="velocity" containers="1">
+   <Container>
+    <DockSplitter orientation="-" sizes="1" count="1">
+     <DockSplitter orientation="|" sizes="0.309685;0.338534;0.351781" count="3">
+      <DockSplitter orientation="-" sizes="0.500437;0.499563" count="2">
+       <DockArea name="...">
+        <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+         <range right="22.339334" left="0.000000" top="1.144204" bottom="-0.702522"/>
+         <limitY/>
+         <curve color="#d62728" name="/flygripper_simple/geometric_controller/data/velocity_current/x"/>
+         <curve color="#f14cc1" name="/flygripper_simple/geometric_controller/data/velocity_reference/x"/>
+        </plot>
+       </DockArea>
+       <DockArea name="...">
+        <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+         <range right="22.339334" left="0.000000" top="1.017500" bottom="-1.279772"/>
+         <limitY/>
+         <curve color="#bcbd22" name="/flygripper_simple/geometric_controller/data/velocity_error/x"/>
+        </plot>
+       </DockArea>
+      </DockSplitter>
+      <DockSplitter orientation="-" sizes="0.5;0.5" count="2">
+       <DockArea name="...">
+        <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+         <range right="22.339334" left="0.000000" top="0.089490" bottom="-0.222768"/>
+         <limitY/>
+         <curve color="#1ac938" name="/flygripper_simple/geometric_controller/data/velocity_current/y"/>
+         <curve color="#9467bd" name="/flygripper_simple/geometric_controller/data/velocity_reference/y"/>
+        </plot>
+       </DockArea>
+       <DockArea name="...">
+        <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+         <range right="22.339334" left="0.000000" top="0.189153" bottom="-0.162071"/>
+         <limitY/>
+         <curve color="#1f77b4" name="/flygripper_simple/geometric_controller/data/velocity_error/y"/>
+        </plot>
+       </DockArea>
+      </DockSplitter>
+      <DockSplitter orientation="-" sizes="0.5;0.5" count="2">
+       <DockArea name="...">
+        <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+         <range right="22.339334" left="0.000000" top="0.544174" bottom="-0.208141"/>
+         <limitY/>
+         <curve color="#ff7f0e" name="/flygripper_simple/geometric_controller/data/velocity_current/z"/>
+         <curve color="#17becf" name="/flygripper_simple/geometric_controller/data/velocity_reference/z"/>
+        </plot>
+       </DockArea>
+       <DockArea name="...">
+        <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+         <range right="22.339334" left="0.000000" top="0.375686" bottom="-0.459651"/>
+         <limitY/>
+         <curve color="#d62728" name="/flygripper_simple/geometric_controller/data/velocity_error/z"/>
+        </plot>
+       </DockArea>
+      </DockSplitter>
+     </DockSplitter>
+    </DockSplitter>
+   </Container>
+  </Tab>
+  <Tab tab_name="thrust" containers="1">
+   <Container>
+    <DockSplitter orientation="-" sizes="0.322256;0.341495;0.336248" count="3">
+     <DockArea name="...">
+      <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+       <range right="22.339334" left="0.000000" top="3.564657" bottom="-4.618907"/>
+       <limitY/>
+       <curve color="#1ac938" name="/flygripper_simple/geometric_controller/data/acceleration_desired/x"/>
+       <curve color="#9467bd" name="/flygripper_simple/geometric_controller/data/acceleration_current/x"/>
+      </plot>
+     </DockArea>
+     <DockArea name="...">
+      <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+       <range right="22.339334" left="0.000000" top="3.615716" bottom="-2.513170"/>
+       <limitY/>
+       <curve color="#ff7f0e" name="/flygripper_simple/geometric_controller/data/acceleration_desired/y"/>
+       <curve color="#17becf" name="/flygripper_simple/geometric_controller/data/acceleration_current/y"/>
+      </plot>
+     </DockArea>
+     <DockArea name="...">
+      <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+       <range right="22.339334" left="0.000000" top="2.313616" bottom="-2.247311"/>
+       <limitY/>
+       <curve color="#f14cc1" name="/flygripper_simple/geometric_controller/data/acceleration_desired/z"/>
+       <curve color="#bcbd22" name="/flygripper_simple/geometric_controller/data/acceleration_current/z"/>
+      </plot>
+     </DockArea>
+    </DockSplitter>
+   </Container>
+  </Tab>
+  <Tab tab_name="attitude" containers="1">
+   <Container>
+    <DockSplitter orientation="-" sizes="1" count="1">
+     <DockSplitter orientation="|" sizes="0.547381;0.452619" count="2">
+      <DockSplitter orientation="-" sizes="0.250219;0.249781;0.249781;0.250219" count="4">
+       <DockArea name="...">
+        <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+         <range right="22.339334" left="0.000000" top="5.935417" bottom="-3.799822"/>
+         <limitY/>
+         <curve color="#ff7f0e" name="/flygripper_simple/geometric_controller/data/attitude_current_rpy/x"/>
+         <curve color="#f14cc1" name="/flygripper_simple/geometric_controller/data/attitude_desired_rpy/x"/>
+        </plot>
+       </DockArea>
+       <DockArea name="...">
+        <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+         <range right="22.339334" left="0.000000" top="17.564065" bottom="-22.912787"/>
+         <limitY/>
+         <curve color="#9467bd" name="/flygripper_simple/geometric_controller/data/attitude_desired_rpy/y"/>
+         <curve color="#17becf" name="/flygripper_simple/geometric_controller/data/attitude_current_rpy/y"/>
+        </plot>
+       </DockArea>
+       <DockArea name="...">
+        <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+         <range right="22.339334" left="0.000000" top="4.651247" bottom="-4.042992"/>
+         <limitY/>
+         <curve color="#bcbd22" name="/flygripper_simple/geometric_controller/data/attitude_desired_rpy/z"/>
+         <curve color="#1f77b4" name="/flygripper_simple/geometric_controller/data/attitude_current_rpy/z"/>
+        </plot>
+       </DockArea>
+       <DockArea name="...">
+        <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+         <range right="38.573759" left="0.000000" top="0.100000" bottom="-0.100000"/>
+         <limitY/>
+        </plot>
+       </DockArea>
+      </DockSplitter>
+      <DockSplitter orientation="-" sizes="0.250219;0.249781;0.250219;0.249781" count="4">
+       <DockArea name="...">
+        <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+         <range right="22.339334" left="0.000000" top="20.022640" bottom="-21.211178"/>
+         <limitY/>
+         <curve color="#1f77b4" name="/flygripper_simple/geometric_controller/data/omega_current/x"/>
+         <curve color="#ff7f0e" name="/flygripper_simple/geometric_controller/data/omega_desired/x"/>
+         <curve color="#1f77b4" name="/flygripper_simple/geometric_controller/data/omega_current_filtered/x"/>
+        </plot>
+       </DockArea>
+       <DockArea name="...">
+        <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+         <range right="22.339334" left="0.000000" top="146.664078" bottom="-111.739731"/>
+         <limitY/>
+         <curve color="#d62728" name="/flygripper_simple/geometric_controller/data/omega_current/y"/>
+         <curve color="#f14cc1" name="/flygripper_simple/geometric_controller/data/omega_desired/y"/>
+         <curve color="#d62728" name="/flygripper_simple/geometric_controller/data/omega_current_filtered/y"/>
+        </plot>
+       </DockArea>
+       <DockArea name="...">
+        <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+         <range right="22.339334" left="0.000000" top="25.454924" bottom="-23.374391"/>
+         <limitY/>
+         <curve color="#1ac938" name="/flygripper_simple/geometric_controller/data/omega_current/z"/>
+         <curve color="#ff7f0e" name="/flygripper_simple/geometric_controller/data/omega_desired/z"/>
+         <curve color="#1ac938" name="/flygripper_simple/geometric_controller/data/omega_current_filtered/z"/>
+        </plot>
+       </DockArea>
+       <DockArea name="...">
+        <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+         <range right="36.811825" left="23.251230" top="0.100000" bottom="-0.100000"/>
+         <limitY/>
+        </plot>
+       </DockArea>
+      </DockSplitter>
+     </DockSplitter>
+    </DockSplitter>
+   </Container>
+  </Tab>
+  <Tab tab_name="alpha" containers="1">
+   <Container>
+    <DockSplitter orientation="-" sizes="0.250219;0.249781;0.249781;0.250219" count="4">
+     <DockArea name="...">
+      <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+       <range right="22.339334" left="0.000000" top="318.113878" bottom="-329.903674"/>
+       <limitY/>
+       <curve color="#bcbd22" name="/flygripper_simple/geometric_controller/data/alpha_desired/x"/>
+       <curve color="#f14cc1" name="/flygripper_simple/geometric_controller/data/alpha_current_filtered/x"/>
+       <curve color="#bcbd22" name="/flygripper_simple/geometric_controller/data/omega_feedback/x"/>
+      </plot>
+     </DockArea>
+     <DockArea name="...">
+      <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+       <range right="22.339334" left="0.000000" top="1222.952329" bottom="-1388.201412"/>
+       <limitY/>
+       <curve color="#1f77b4" name="/flygripper_simple/geometric_controller/data/alpha_desired/y"/>
+       <curve color="#9467bd" name="/flygripper_simple/geometric_controller/data/alpha_current_filtered/y"/>
+       <curve color="#1f77b4" name="/flygripper_simple/geometric_controller/data/omega_feedback/y"/>
+      </plot>
+     </DockArea>
+     <DockArea name="...">
+      <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+       <range right="22.339334" left="0.000000" top="311.786306" bottom="-788.098224"/>
+       <limitY/>
+       <curve color="#d62728" name="/flygripper_simple/geometric_controller/data/alpha_desired/z"/>
+       <curve color="#17becf" name="/flygripper_simple/geometric_controller/data/alpha_current_filtered/z"/>
+       <curve color="#d62728" name="/flygripper_simple/geometric_controller/data/omega_feedback/z"/>
+      </plot>
+     </DockArea>
+     <DockArea name="...">
+      <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+       <range right="113.129894" left="36.839814" top="4189.880699" bottom="-171784.844674"/>
+       <limitY/>
+      </plot>
+     </DockArea>
+    </DockSplitter>
+   </Container>
+  </Tab>
+  <Tab tab_name="actuator" containers="1">
+   <Container>
+    <DockSplitter orientation="-" sizes="0.2;0.2;0.2;0.2;0.2" count="5">
+     <DockArea name="...">
+      <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+       <range right="22.339334" left="0.000000" top="26570.150000" bottom="14593.850000"/>
+       <limitY/>
+       <curve color="#1f77b4" name="/flygripper_simple/geometric_controller/data/rotor_velocities_current.0"/>
+       <curve color="#d62728" name="/flygripper_simple/geometric_controller/data/rotor_velocities_desired.0"/>
+       <curve color="#ff7f0e" name="/flygripper_simple/geometric_controller/data/rotor_velocities_current_filtered.0"/>
+      </plot>
+     </DockArea>
+     <DockArea name="...">
+      <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+       <range right="22.339334" left="0.000000" top="22249.513873" bottom="15740.011857"/>
+       <limitY/>
+       <curve color="#c91a47" name="/flygripper_simple/geometric_controller/data/rotor_velocities_current.1"/>
+       <curve color="#ff7f0e" name="/flygripper_simple/geometric_controller/data/rotor_velocities_desired.1"/>
+       <curve color="#f14cc1" name="/flygripper_simple/geometric_controller/data/rotor_velocities_current_filtered.1"/>
+      </plot>
+     </DockArea>
+     <DockArea name="...">
+      <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+       <range right="22.339334" left="0.000000" top="26208.275628" bottom="9648.699257"/>
+       <limitY/>
+       <curve color="#f14cc1" name="/flygripper_simple/geometric_controller/data/rotor_velocities_current.2"/>
+       <curve color="#9467bd" name="/flygripper_simple/geometric_controller/data/rotor_velocities_desired.2"/>
+       <curve color="#9467bd" name="/flygripper_simple/geometric_controller/data/rotor_velocities_current_filtered.2"/>
+      </plot>
+     </DockArea>
+     <DockArea name="...">
+      <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+       <range right="22.339334" left="0.000000" top="22164.012134" bottom="11159.502505"/>
+       <limitY/>
+       <curve color="#17becf" name="/flygripper_simple/geometric_controller/data/rotor_velocities_current.3"/>
+       <curve color="#bcbd22" name="/flygripper_simple/geometric_controller/data/rotor_velocities_desired.3"/>
+       <curve color="#17becf" name="/flygripper_simple/geometric_controller/data/rotor_velocities_current_filtered.3"/>
+      </plot>
+     </DockArea>
+     <DockArea name="...">
+      <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+       <range right="22.339334" left="0.000000" top="1.272700" bottom="-10.180681"/>
+       <limitY/>
+       <curve color="#1ac938" name="/flygripper_simple/actuator_state/overload"/>
+       <curve color="#ff7f0e" name="/flygripper_simple/actuator_state/position"/>
+      </plot>
+     </DockArea>
+    </DockSplitter>
+   </Container>
+  </Tab>
+  <Tab tab_name="external" containers="1">
+   <Container>
+    <DockSplitter orientation="-" sizes="1" count="1">
+     <DockSplitter orientation="|" sizes="0.500294;0.499706" count="2">
+      <DockSplitter orientation="-" sizes="0.333188;0.333625;0.333188" count="3">
+       <DockArea name="...">
+        <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+         <range right="22.339334" left="0.000000" top="0.541241" bottom="-1.232105"/>
+         <limitY/>
+         <curve color="#9467bd" name="/flygripper_simple/geometric_controller/data/external_force_indi/x"/>
+         <curve color="#1f77b4" name="/flygripper_simple/geometric_controller/data/external_force_l1/x"/>
+        </plot>
+       </DockArea>
+       <DockArea name="...">
+        <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+         <range right="22.339334" left="0.000000" top="0.426563" bottom="-0.146638"/>
+         <limitY/>
+         <curve color="#17becf" name="/flygripper_simple/geometric_controller/data/external_force_indi/y"/>
+         <curve color="#d62728" name="/flygripper_simple/geometric_controller/data/external_force_l1/y"/>
+        </plot>
+       </DockArea>
+       <DockArea name="...">
+        <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+         <range right="22.339334" left="0.000000" top="0.394747" bottom="-3.001458"/>
+         <limitY/>
+         <curve color="#bcbd22" name="/flygripper_simple/geometric_controller/data/external_force_indi/z"/>
+         <curve color="#1ac938" name="/flygripper_simple/geometric_controller/data/external_force_l1/z"/>
+        </plot>
+       </DockArea>
+      </DockSplitter>
+      <DockSplitter orientation="-" sizes="0.333188;0.333625;0.333188" count="3">
+       <DockArea name="...">
+        <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+         <range right="22.339334" left="0.000000" top="0.033845" bottom="-0.002829"/>
+         <limitY/>
+         <curve color="#ff7f0e" name="/flygripper_simple/geometric_controller/data/external_torque_indi/x"/>
+         <curve color="#17becf" name="/flygripper_simple/geometric_controller/data/external_torque_l1/x"/>
+        </plot>
+       </DockArea>
+       <DockArea name="...">
+        <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+         <range right="22.339334" left="0.000000" top="0.147001" bottom="-0.074482"/>
+         <limitY/>
+         <curve color="#f14cc1" name="/flygripper_simple/geometric_controller/data/external_torque_indi/y"/>
+         <curve color="#bcbd22" name="/flygripper_simple/geometric_controller/data/external_torque_l1/y"/>
+        </plot>
+       </DockArea>
+       <DockArea name="...">
+        <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+         <range right="22.339334" left="0.000000" top="0.055218" bottom="-0.029210"/>
+         <limitY/>
+         <curve color="#9467bd" name="/flygripper_simple/geometric_controller/data/external_torque_indi/z"/>
+         <curve color="#1f77b4" name="/flygripper_simple/geometric_controller/data/external_torque_l1/z"/>
+        </plot>
+       </DockArea>
+      </DockSplitter>
+     </DockSplitter>
+    </DockSplitter>
+   </Container>
+  </Tab>
+  <Tab tab_name="morphing" containers="1">
+   <Container>
+    <DockSplitter orientation="|" sizes="0.373455;0.626545" count="2">
+     <DockSplitter orientation="-" sizes="0.2;0.2;0.2;0.2;0.2" count="5">
+      <DockArea name="...">
+       <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+        <range right="22.339334" left="0.000000" top="7.127928" bottom="1.754966"/>
+        <limitY/>
+        <curve color="#17becf" name="/flygripper_simple/geometric_controller/data/position_error/x"/>
+        <curve color="#1ac938" name="/flygripper_simple/geometric_controller/data/position_current/x"/>
+        <curve color="#f14cc1" name="/flygripper_simple/geometric_controller/data/position_reference/x"/>
+       </plot>
+      </DockArea>
+      <DockArea name="...">
+       <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+        <range right="22.339334" left="0.000000" top="17.564065" bottom="-22.912787"/>
+        <limitY/>
+        <curve color="#17becf" name="/flygripper_simple/geometric_controller/data/attitude_desired_rpy/y"/>
+        <curve color="#bcbd22" name="/flygripper_simple/geometric_controller/data/attitude_current_rpy/y"/>
+       </plot>
+      </DockArea>
+      <DockArea name="...">
+       <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+        <range right="22.339334" left="0.000000" top="0.541241" bottom="-1.232105"/>
+        <limitY/>
+        <curve color="#1ac938" name="/flygripper_simple/geometric_controller/data/external_force_l1/x"/>
+        <curve color="#f14cc1" name="/flygripper_simple/geometric_controller/data/external_force_indi/x"/>
+       </plot>
+      </DockArea>
+      <DockArea name="...">
+       <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+        <range right="22.339334" left="0.000000" top="0.116393" bottom="-0.053548"/>
+        <limitY/>
+        <curve color="#1f77b4" name="/mavros/debug_value/debug_vector/data.1"/>
+       </plot>
+      </DockArea>
+      <DockArea name="...">
+       <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+        <range right="22.339334" left="0.000000" top="0.250000" bottom="-10.250000"/>
+        <limitY/>
+        <curve color="#17becf" name="/flygripper_simple/actuator_state/position"/>
+        <curve color="#bcbd22" name="/flygripper_simple/actuator_command/reference_position"/>
+       </plot>
+      </DockArea>
+     </DockSplitter>
+     <DockSplitter orientation="-" sizes="0.20035;0.202537;0.19685;0.400262" count="4">
+      <DockSplitter orientation="|" sizes="0.5;0.5" count="2">
+       <DockArea name="...">
+        <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+         <range right="22.339334" left="0.000000" top="0.425649" bottom="-0.089299"/>
+         <limitY/>
+         <curve color="#bcbd22" name="/flygripper_simple/geometric_controller/data/position_error/y"/>
+         <curve color="#ff7f0e" name="/flygripper_simple/geometric_controller/data/position_current/y"/>
+         <curve color="#9467bd" name="/flygripper_simple/geometric_controller/data/position_reference/y"/>
+        </plot>
+       </DockArea>
+       <DockArea name="...">
+        <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+         <range right="22.339334" left="0.000000" top="1.942505" bottom="-0.140475"/>
+         <limitY/>
+         <curve color="#1f77b4" name="/flygripper_simple/geometric_controller/data/position_reference/z"/>
+         <curve color="#d62728" name="/flygripper_simple/geometric_controller/data/position_error/z"/>
+         <curve color="#1ac938" name="/flygripper_simple/geometric_controller/data/position_current/z"/>
+        </plot>
+       </DockArea>
+      </DockSplitter>
+      <DockSplitter orientation="|" sizes="0.5;0.5" count="2">
+       <DockArea name="...">
+        <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+         <range right="22.339334" left="0.000000" top="5.935417" bottom="-3.799822"/>
+         <limitY/>
+         <curve color="#1f77b4" name="/flygripper_simple/geometric_controller/data/attitude_current_rpy/x"/>
+         <curve color="#d62728" name="/flygripper_simple/geometric_controller/data/attitude_desired_rpy/x"/>
+        </plot>
+       </DockArea>
+       <DockArea name="...">
+        <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+         <range right="22.339334" left="0.000000" top="4.651247" bottom="-4.042992"/>
+         <limitY/>
+         <curve color="#ff7f0e" name="/flygripper_simple/geometric_controller/data/attitude_desired_rpy/z"/>
+         <curve color="#f14cc1" name="/flygripper_simple/geometric_controller/data/attitude_current_rpy/z"/>
+        </plot>
+       </DockArea>
+      </DockSplitter>
+      <DockSplitter orientation="|" sizes="0.5;0.5" count="2">
+       <DockArea name="...">
+        <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+         <range right="22.339334" left="0.000000" top="0.426563" bottom="-0.146638"/>
+         <limitY/>
+         <curve color="#ff7f0e" name="/flygripper_simple/geometric_controller/data/external_force_l1/y"/>
+         <curve color="#9467bd" name="/flygripper_simple/geometric_controller/data/external_force_indi/y"/>
+        </plot>
+       </DockArea>
+       <DockArea name="...">
+        <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+         <range right="22.339334" left="0.000000" top="0.394747" bottom="-3.001458"/>
+         <limitY/>
+         <curve color="#17becf" name="/flygripper_simple/geometric_controller/data/external_force_l1/z"/>
+         <curve color="#bcbd22" name="/flygripper_simple/geometric_controller/data/external_force_indi/z"/>
+        </plot>
+       </DockArea>
+      </DockSplitter>
+      <DockSplitter orientation="|" sizes="0.50047;0.49953" count="2">
+       <DockSplitter orientation="-" sizes="0.5;0.5" count="2">
+        <DockArea name="...">
+         <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+          <range right="22.339334" left="0.000000" top="0.004495" bottom="-0.021345"/>
+          <limitY/>
+          <curve color="#d62728" name="/mavros/debug_value/debug_vector/data.0"/>
+         </plot>
+        </DockArea>
+        <DockArea name="...">
+         <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+          <range right="22.339334" left="0.000000" top="0.250000" bottom="-10.250000"/>
+          <limitY/>
+          <curve color="#17becf" name="/flygripper_simple/actuator_state/position"/>
+          <curve color="#bcbd22" name="/flygripper_simple/actuator_command/reference_position"/>
+         </plot>
+        </DockArea>
+       </DockSplitter>
+       <DockSplitter orientation="-" sizes="0.5;0.5" count="2">
+        <DockArea name="...">
+         <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+          <range right="22.339334" left="0.000000" top="0.100000" bottom="-0.100000"/>
+          <limitY/>
+          <curve color="#9467bd" name="/mavros/debug_value/debug_vector/data.2"/>
+         </plot>
+        </DockArea>
+        <DockArea name="...">
+         <plot flip_y="false" mode="TimeSeries" flip_x="false" style="Lines">
+          <range right="22.339334" left="0.000000" top="0.250000" bottom="-10.250000"/>
+          <limitY/>
+          <curve color="#17becf" name="/flygripper_simple/actuator_state/position"/>
+          <curve color="#bcbd22" name="/flygripper_simple/actuator_command/reference_position"/>
+         </plot>
+        </DockArea>
+       </DockSplitter>
+      </DockSplitter>
+     </DockSplitter>
+    </DockSplitter>
+   </Container>
+  </Tab>
+  <currentTabIndex index="7"/>
+ </tabbed_widget>
+ <use_relative_time_offset enabled="1"/>
+ <!-- - - - - - - - - - - - - - - -->
+ <!-- - - - - - - - - - - - - - - -->
+ <Plugins>
+  <plugin ID="DataLoad CSV">
+   <default delimiter="0" time_axis=""/>
+  </plugin>
+  <plugin ID="DataLoad MCAP"/>
+  <plugin ID="DataLoad ROS bags">
+   <use_header_stamp value="false"/>
+   <discard_large_arrays value="true"/>
+   <max_array_size value="100"/>
+   <boolean_strings_to_number value="true"/>
+   <remove_suffix_from_strings value="true"/>
+  </plugin>
+  <plugin ID="DataLoad ULog"/>
+  <plugin ID="ROS Topic Subscriber">
+   <use_header_stamp value="false"/>
+   <discard_large_arrays value="true"/>
+   <max_array_size value="100"/>
+   <boolean_strings_to_number value="true"/>
+   <remove_suffix_from_strings value="true"/>
+  </plugin>
+  <plugin ID="UDP Server"/>
+  <plugin ID="WebSocket Server"/>
+  <plugin ID="ZMQ Subscriber"/>
+  <plugin ID="Fast Fourier Transform"/>
+  <plugin ID="Quaternion to RPY"/>
+  <plugin ID="Reactive Script Editor">
+   <library code="--[[ Helper function to create a series from arrays&#xa;&#xa; new_series: a series previously created with ScatterXY.new(name)&#xa; prefix:     prefix of the timeseries, before the index of the array&#xa; suffix_X:   suffix to complete the name of the series containing the X value. If [nil], use the index of the array.&#xa; suffix_Y:   suffix to complete the name of the series containing the Y value&#xa; timestamp:   usually the tracker_time variable&#xa;              &#xa; Example:&#xa; &#xa; Assuming we have multiple series in the form:&#xa; &#xa;   /trajectory/node.{X}/position/x&#xa;   /trajectory/node.{X}/position/y&#xa;   &#xa; where {N} is the index of the array (integer). We can create a reactive series from the array with:&#xa; &#xa;   new_series = ScatterXY.new(&quot;my_trajectory&quot;) &#xa;   CreateSeriesFromArray( new_series, &quot;/trajectory/node&quot;, &quot;position/x&quot;, &quot;position/y&quot;, tracker_time );&#xa;--]]&#xa;&#xa;function CreateSeriesFromArray( new_series, prefix, suffix_X, suffix_Y, timestamp )&#xa;  &#xa;  --- clear previous values&#xa;  new_series:clear()&#xa;  &#xa;  --- Append points to new_series&#xa;  index = 0&#xa;  while(true) do&#xa;&#xa;    x = index;&#xa;    -- if not nil, get the X coordinate from a series&#xa;    if suffix_X ~= nil then &#xa;      series_x = TimeseriesView.find( string.format( &quot;%s.%d/%s&quot;, prefix, index, suffix_X) )&#xa;      if series_x == nil then break end&#xa;      x = series_x:atTime(timestamp)&#x9; &#xa;    end&#xa;    &#xa;    series_y = TimeseriesView.find( string.format( &quot;%s.%d/%s&quot;, prefix, index, suffix_Y) )&#xa;    if series_y == nil then break end &#xa;    y = series_y:atTime(timestamp)&#xa;    &#xa;    new_series:push_back(x,y)&#xa;    index = index+1&#xa;  end&#xa;end&#xa;&#xa;--[[ Similar to the built-in function GetSeriesNames(), but select only the names with a give prefix. --]]&#xa;&#xa;function GetSeriesNamesByPrefix(prefix)&#xa;  -- GetSeriesNames(9 is a built-in function&#xa;  all_names = GetSeriesNames()&#xa;  filtered_names = {}&#xa;  for i, name in ipairs(all_names)  do&#xa;    -- check the prefix&#xa;    if name:find(prefix, 1, #prefix) then&#xa;      table.insert(filtered_names, name);&#xa;    end&#xa;  end&#xa;  return filtered_names&#xa;end&#xa;&#xa;--[[ Modify an existing series, applying offsets to all their X and Y values&#xa;&#xa; series: an existing timeseries, obtained with TimeseriesView.find(name)&#xa; delta_x: offset to apply to each x value&#xa; delta_y: offset to apply to each y value &#xa;  &#xa;--]]&#xa;&#xa;function ApplyOffsetInPlace(series, delta_x, delta_y)&#xa;  -- use C++ indeces, not Lua indeces&#xa;  for index=0, series:size()-1 do&#xa;    x,y = series:at(index)&#xa;    series:set(index, x + delta_x, y + delta_y)&#xa;  end&#xa;end&#xa;"/>
+   <scripts/>
+  </plugin>
+  <plugin ID="CSV Exporter"/>
+  <plugin ID="ROS /rosout Visualization"/>
+  <plugin ID="ROS Topic Re-Publisher"/>
+ </Plugins>
+ <!-- - - - - - - - - - - - - - - -->
+ <!-- - - - - - - - - - - - - - - -->
+ <customMathEquations/>
+ <snippets/>
+ <!-- - - - - - - - - - - - - - - -->
+</root>
+

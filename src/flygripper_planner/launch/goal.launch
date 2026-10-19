@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<launch>
+    <!-- common parameters -->
+    <arg name="mav_name"  default="flygripper"/>
+    <arg name="namespace" default="$(arg mav_name)"/>
+
+    <group ns="$(arg namespace)">
+        <node pkg="flygripper_planner" type="goal" name="goal" output="screen">
+            <rosparam file="$(find flygripper_planner)/params/goal.yaml" command="load" />
+            <remap from="waypoint" to="/goal"/>
+            <remap from="odom" to="/ekf/ekf_odom"/>
+        </node>
+    </group>
+
+</launch>

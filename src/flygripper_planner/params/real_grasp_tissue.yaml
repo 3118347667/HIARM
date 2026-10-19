@@ -1,0 +1,106 @@
+# ----------------------------- DOOR -------------------------
+arc_angle: 1.0
+arc_radius: 0.5
+arc_point_num: 5
+
+# -------------------------- OPT -------------------------------
+K: 8
+rhoT: 10.0
+rhoV: 1000.0
+rhoA: 1000.0
+rhoDYaw: 1000.0
+max_iteration: 300
+
+pause_debug: false
+# -------------------------- NOT_USE ----------------------------
+M: 8
+rhoPAlignmentDistance: 1.5
+rhoPAlignmentAngle: 1000.0
+rhoYawAlignmentAngle: 1000.0
+min_piece_num: 2
+fix_p: true
+magic_number: 0
+
+# ------------------------ Morphing -------------------------------
+morph_shrink_pos: -12.0 # 5.0 shrink angle position
+morph_expand_pos: 0.0 # expand angle position
+morph_duration: 0.9
+
+# ----------------------------- Task -------------------------------
+# task_num: assign task number
+
+# task_n:
+#   ---------------  Planning Setting -------------
+#   plan_type: 0: POINT, 1: DOOR
+
+#   --- Plan Points: plan_type is 0---
+#   plan_point_num: plan point number
+#   plan_point_0, ..., plan_point_n:
+#       {x, y , z, yaw[optional]}
+
+#   -------- Plan Constraints --------
+#   plan_max_vel: should be > 0
+#   plan_max_acc: should be > 0
+#   plan_max_dyaw: should be > 0
+
+#   ------ Plan Terminal Velocity ----
+#   plan_terminal_vel {x, y , z}
+
+#   ------- Plan Complete Eval -------
+#   Plan Tolerance
+#   plan_tolerance: should be > 0
+#      if plan_tolerance < 0 and morph_trigger set to 1(after reach goal) ,
+#      it will be reformed based on planned trajectory and morph_duration
+
+#   ---------------  Morphing Setting ---------------
+#   morph_action: 0: idle, 1: expanding, 2: shrinking
+#   morph_trigger: 0: start with planning, 1: after reach goal
+#   morph_tolerance: morph goal tolerance
+
+use_odom_init_vel: false
+task_num: 3
+
+task_0: # Align
+  plan_type: 0 # POINT
+  plan_point_num: 1
+  plan_point_0: {x: 4.575, y: -0.572, z: 1.04, yaw: 0.0} # flying to a hovering point
+  plan_terminal_vel: { x: 0.0, y: 0.0, z: 0.0}
+  plan_max_vel: 0.5
+  plan_max_acc: 0.5
+  plan_max_dyaw: 0.5
+  plan_tolerance: 0.05
+
+  morph_action: 1  # expanding
+  morph_trigger: 0 # start with planning
+  morph_auto: true
+  morph_tolerance: 0.1
+
+task_1: # Grasping
+  plan_type: 0 # POINT
+  plan_point_num: 1
+  plan_point_0: { x: 5.575, y: -0.572, z: 1.04} # flying towards and GRASPING the object
+  plan_terminal_vel: { x: 0.0, y: 0.0, z: 0.0}
+  plan_max_vel: 0.6
+  plan_max_acc: 0.6
+  plan_max_dyaw: 0.5
+  plan_tolerance: 0.20 #-0.15 # BIG to accelerate morph trigger
+
+  morph_action: 2  # shrinking
+  morph_trigger: 1 # after reach goal
+  morph_auto: true
+  morph_tolerance: 1.0 # BIG to accelerate next stage plan
+
+task_2:  # Releasing
+  plan_type: 0 # POINT
+  plan_point_num: 1
+  plan_point_0: { x: 5.075, y: -0.572, z: 1.04 } # flying upwards
+  plan_terminal_vel: { x: 0.0, y: 0.0, z: 0.0}
+  plan_max_vel: 0.4
+  plan_max_acc: 0.4
+  plan_max_dyaw: 0.5
+  plan_tolerance: 0.05
+
+  morph_action: 0  # expanding
+  morph_trigger: 1 # after reach goal
+  morph_auto: true
+  morph_tolerance: 0.1 # morph angle tolerance

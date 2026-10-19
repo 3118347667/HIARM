@@ -1,0 +1,29 @@
+<launch>
+    <!-- common parameters -->
+    <arg name="mav_name"    default="flygripper"/>
+    <arg name="namespace"   default="$(arg mav_name)"/>
+    <arg name="record"      default="false" />
+    <arg name="record_path" default="$(find flygripper_flight)/bags/$(arg mav_name)" />
+
+    <group ns="$(arg namespace)">
+        <rosparam command="load" file="$(find flygripper_flight)/params/$(arg mav_name).yaml"/>
+        <node pkg="flygripper_flight" type="flygripper_flight_calibr" name="flygripper_flight_calibr" output="screen">
+            <param name="control_frequency" value="333"/>
+            <param name="calibration_mode" value="false"/>
+            <!-- input -->
+            <!--        <remap from="/mavros/rc/in" to=""/>-->
+
+            <!-- output -->
+            <!--        <remap from="/mavros/actuator_control" to=""/> -->
+        </node>
+    </group>
+
+<!--    <group ns="$(arg namespace)">-->
+<!--        <rosparam command="load" file="$(find flygripper_flight)/params/$(arg mav_name).yaml"/>-->
+<!--        <node pkg="flygripper_flight" type="flygripper_flight_calibr2" name="flygripper_flight_calibr2" output="screen">-->
+<!--        </node>-->
+<!--    </group>-->
+
+    <node pkg="rosbag" type="record" name="rosbag_record" output="screen"
+          args="-a --tcpnodelay -o $(arg record_path)" if="$(arg record)"/>
+</launch>

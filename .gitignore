@@ -1,0 +1,30 @@
+.vscode
+build/
+devel/
+logs/
+bags/*.bag*
+compile_commands.json
+*.onnx
+
+# vim
+.*.swp
+.*.swo
+
+# clangd
+.clangd
+
+# python
+__pycache__/
+*.pyc
+
+.runtime_captures/
+
+# macOS metadata and ROS recordings anywhere in the workspace
+.DS_Store
+._*
+*.bag*
+
+# Local build and browser artifacts
+.catkin_tools/
+/.playwright-cli/
+/output/playwright/

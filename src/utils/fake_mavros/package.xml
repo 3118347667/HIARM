@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<package format="2">
+  <name>fake_mavros</name>
+  <version>0.0.0</version>
+  <description>The fake_mavros package</description>
+  
+  <maintainer email="flygripper0young@gmail.com">flygripper Young</maintainer>
+  <license>MIT</license>
+
+  <author>flygripper Young</author>
+
+  <buildtool_depend>catkin</buildtool_depend>
+
+  <depend>roscpp</depend>
+  <depend>geometry_msgs</depend>
+  <depend>mavros_msgs</depend>
+  <depend>sensor_msgs</depend>
+  <depend>flygripper_msgs</depend>
+
+  <export>
+
+  </export>
+</package>

@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<launch>
+    <!-- common parameters -->
+    <arg name="mav_name"  default="flygripper"/>
+    <arg name="namespace" default="$(arg mav_name)"/>
+    <arg name="use_sim"     default="false"/>
+
+    <group ns="$(arg namespace)">
+        <node pkg="poly_planner" type="poly_planner_node" name="poly_planner" output="screen">
+            <!-- node parameters -->
+            <rosparam file="$(find poly_planner)/config/params.yaml" command="load" />
+            <remap from="plan_trigger" to="/move_base_simple/goal" />
+            <!-- <remap from="odom" to="/ekf/ekf_odom" unless="$(arg use_sim)"/> -->
+            <remap from="odom" to="/ekf/ekf_odom" unless="$(arg use_sim)"/>
+<!--            <remap from="trajectory" to="" />-->
+        </node>
+    </group>
+
+<!--     <node name="rviz" pkg="rviz" type="rviz" output="screen"-->
+<!--           args="-d $(find poly_planner)/config/$(arg namespace).rviz"> -->
+<!--    </node>-->
+</launch>

@@ -1,0 +1,29 @@
+<?xml version="1.0"?>
+<launch>
+    <!-- common parameters -->
+    <arg name="mav_name"           default="flygripper"/>
+
+<!--     <arg name="actuator_type"      default="bldc"/> -->
+<!--     <arg name="actuator_bus"       default="uart_can"/> -->
+<!--     <arg name="actuator_interface" default="/dev/CAN_MOTOR"/> -->
+<!--     <arg name="actuator_bus"       default="socket_can"/> -->
+<!--     <arg name="actuator_interface" default="can0"/> -->
+
+    <arg name="actuator_type"      default="servo"/>
+    <arg name="actuator_bus"       default="uart"/>
+    <arg name="actuator_interface" default="/dev/ttyS4"/>
+
+    <arg name="package_name"       default="flygripper_actuator"/>
+    <arg name="launch_name"        default="$(arg actuator_type).launch"/>
+
+    <node pkg="flygripper_actuator" type="launch_with_root.sh"
+          args="$(arg package_name) $(arg launch_name)
+                $(arg mav_name) $(arg actuator_bus) $(arg actuator_interface)"
+          name="flygripper_actuator_launcher" output="screen"/>
+
+    <!-- <include file="$(find flygripper_actuator)/launch/servo.launch"> -->
+    <!--     <arg name="mav_name" value="$(arg mav_name)"/> -->
+    <!--     <arg name="actuator_bus" value="$(arg actuator_bus)"/> -->
+    <!--     <arg name="actuator_interface" value="$(arg actuator_interface)"/> -->
+    <!-- </include> -->
+</launch>

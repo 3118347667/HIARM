@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<launch>
+  <arg name="target_pose_topic" default="/vrpn_client_node/HIARM_car/pose"/>
+  <arg name="odom_topic" default="/ekf/ekf_odom"/>
+  <!-- Mocap target origin is the grasp point; +Z is above the car. -->
+  <arg name="grasp_height" default="0.09"/>
+  <arg name="rho_grasp" default="0.0"/>
+  <arg name="hold_yaw" default="true"/>
+  <arg name="vmax" default="0.40"/>
+  <arg name="amax" default="0.40"/>
+  <group ns="drone0">
+    <include file="$(find planning)/launch/planning.launch">
+      <!-- This workspace uses a free-space mocap grid, without occluders. -->
+      <arg name="rhosVisibility_" value="0.0"/>
+      <arg name="rhoTracking_" value="1000.0"/>
+      <arg name="target_name_" value="$(arg target_pose_topic)"/>
+      <arg name="odom_topic" value="$(arg odom_topic)"/>
+      <arg name="grasp_height" value="$(arg grasp_height)"/>
+      <arg name="rho_grasp" value="$(arg rho_grasp)"/>
+      <arg name="hold_yaw" value="$(arg hold_yaw)"/>
+      <arg name="vmax" value="$(arg vmax)"/>
+      <arg name="amax" value="$(arg amax)"/>
+    </include>
+  </group>
+</launch>

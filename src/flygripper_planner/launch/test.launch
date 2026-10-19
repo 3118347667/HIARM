@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<launch>
+    <!-- common parameters -->
+   <arg name="mav_name"  default="flygripper"/>
+   <arg name="namespace" default="$(arg mav_name)"/>
+
+   <group ns="$(arg namespace)">
+     <node pkg="flygripper_planner" type="grasp_test" name="grasp_test" output="screen">
+       <rosparam file="$(find flygripper_planner)/params/grasp.yaml" command="load" />
+       <remap from="obj_odom" to="/coke_can" />
+       <remap from="obj_pose" to="/initialpose" />
+     </node>
+
+<!--      <node pkg="flygripper_planner" type="joy_test" name="joy_test" output="screen"> -->
+<!--        <rosparam file="$(find flygripper_planner)/params/joy.yaml" command="load" /> -->
+<!--      </node> -->
+
+<!--      <node pkg="flygripper_planner" type="online_test" name="online_test" output="screen">-->
+<!--      <remap from="/move_base_simple/goal" to="/move_base_simple/goal" />-->
+<!--        <rosparam file="$(find flygripper_planner)/params/online.yaml" command="load" />-->
+<!--      </node>-->
+
+<!--       <node pkg="flygripper_planner" type="offline_test" name="offline_test" output="screen"> -->
+<!--       <remap from="/move_base_simple/goal" to="/move_base_simple/goal" /> -->
+<!--         <rosparam file="$(find flygripper_planner)/params/offline.yaml" command="load" /> -->
+<!--       </node> -->
+
+  </group>
+
+
+   <node name="rviz" pkg="rviz" type="rviz" output="screen"
+     args="-d $(find flygripper_planner)/config/test.rviz">
+   </node>
+
+</launch>

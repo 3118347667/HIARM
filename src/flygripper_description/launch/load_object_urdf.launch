@@ -1,0 +1,33 @@
+<launch>
+    <!-- common parameters -->
+    <arg name="obj_name"  default="coke_can"/>
+    <arg name="model"     default="$(find flygripper_description)/urdf/object.xacro"/>
+
+    <!-- simulation parameters -->
+    <arg name="use_sim" default="true"/>
+    <arg name="x" default="-1.0"/>
+    <arg name="y" default="-1.0"/>
+    <arg name="z" default="0.0"/>
+
+    <!-- send the robot XML to param server
+         with args of namespace and use_sim used in robot model name and gazebo_ros_control plugin -->
+    <param name="$(arg obj_name)_description"
+           command="$(find xacro)/xacro '$(arg model)' obj_name:=$(arg obj_name) use_sim:=$(arg use_sim)"/>
+
+    <group if="$(arg use_sim)">
+        <!-- push robot_description to factory and spawn robot in gazebo -->
+        <node name="spawn_$(arg obj_name)" pkg="gazebo_ros" type="spawn_model" clear_params="true"
+              args="-param $(arg obj_name)_description
+         -urdf
+         -x $(arg x)
+         -y $(arg y)
+         -z $(arg z)
+         -model $(arg obj_name)" respawn="false" output="screen"/>
+    </group>
+
+<!-- robot_state_publisher: subscribe the joint_states and publish tf -->
+<!--         <node name="robot_state_publisher" pkg="robot_state_publisher" type="robot_state_publisher"/> -->
+
+
+
+</launch>
