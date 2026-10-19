@@ -29,7 +29,7 @@
 cd /Users/lzf/Documents/HIARM
 ```
 
-不要在 `root@容器:/ws#` 内运行 `./docker/sim.sh`：它是宿主机 Docker 管理脚本，容器中没有 Docker CLI。容器内运行的是 `start.sh`、ROS 节点和任务脚本。
+不要在 `root@容器:/ws#` 内运行 `./docker/sim.sh`：它是宿主机 Docker 管理脚本，容器中没有 Docker CLI。容器内用 `start.sh` 管理仿真启动，运行 ROS 节点和任务脚本。
 
 ### 1.2 日常使用：WebGL
 
@@ -212,23 +212,22 @@ HIARM_DESKTOP=false HIARM_GUI=false ./docker/sim.sh start
 
 1. `sim.sh` 切换到仓库根目录，使用固定的 `docker/compose.yaml`。
 2. `start` 构建或复用 `hiarm:noetic-arm64` 镜像。Dockerfile 固定 ROS 基础镜像摘要，安装编译工具、ROS/Gazebo/RViz、桌面和软件渲染依赖。
-3. APT 使用 USTC Ubuntu 镜像、缓存挂载及重试；ROS 源来自基础镜像。
+3. APT 使用 USTC Ubuntu 镜像、缓存挂载及重试。原依赖层沿用基础镜像的 ROS 快照源；新增开发工具层切换到 USTC ROS 镜像，并使用 ROS 官方公钥校验签名，避开快照源下载错误，同时保留前面各层的构建缓存。
 4. Compose 创建容器、映射端口并挂载源码和构建卷。
-5. 容器执行 `bash docker/start.sh`；宿主机打印访问地址。后续初始化仍在容器中继续。
+5. 容器执行 `bash docker/container.sh`；宿主机打印访问地址。后续初始化仍在容器中继续。
 
 `demo` / `mission` 的后续流程：每隔 2 秒检查容器中的 `/ws/devel/.hiarm-build-ok`。等待期间容器停止则报错退出；标记存在后，加载 `devel/setup.bash` 并执行任务脚本。这个等待没有固定时限，首次编译较慢时可在另一终端查看日志，或按 Ctrl+C 结束。
 
-### 5.2 容器：start.sh
+### 5.2 容器入口与仿真进程
 
-1. 创建 `docker/logs`，加载 `/opt/ros/noetic/setup.bash`。
-2. 若缺少 `devel/.hiarm-build-ok`，调用 `build.sh` 编译；已有标记则跳过。
-3. 加载 `devel/setup.bash`，使本项目 ROS 包和插件可被找到。
-4. 清理失效的 X11 锁/套接字，启动 `Xvfb :1`，检查 OpenGL 初始化。
-5. 如果启用桌面，启动窗口管理器、任务栏、VNC 和网页代理。
-6. 执行 `roslaunch docker/sim.launch`：启动 Gazebo、生成机器人描述、生成模型、启动模拟飞控、飞行控制器及 `real` 规划器。
-7. 轮询 `/use_sim_time` 参数是否可读取，再轮询机器人描述参数，然后启动可视化 TF 桥接；启用桌面时打开 RViz。任务脚本会另外确认 `/use_sim_time=true` 和传感器数据。
-8. 启动 `virtual_rc.py` 和 `web_server.py`，网页开始接收实时场景数据。
-9. 脚本等待 roslaunch 或网页服务退出；收到退出信号时清理相关子进程。
+1. `container.sh` 创建 `docker/logs`，启动 `Xvfb :1`，检查 OpenGL 初始化。
+2. 如果启用桌面，启动 Openbox、任务栏、VNC 和 noVNC；这些进程由容器入口管理。
+3. 入口后台运行 `start.sh`。它加载 ROS 环境；缺少 `devel/.hiarm-build-ok` 时先调用 `build.sh` 编译，再加载工作区环境。
+4. `start.sh` 执行 `roslaunch docker/sim.launch`，启动 Gazebo、机器人、模拟飞控、控制器与规划器。
+5. 等待仿真参数及机器人描述，启动 RViz TF 桥接、虚拟遥控、WebGL 服务；启用桌面时打开 RViz。
+6. ROS launch 或 Web 服务退出时，`start.sh` 清理本次仿真进程。容器入口继续保活，Shell、VS Code 和 noVNC 桌面仍可使用，不自动重启仿真。
+7. Docker 停止容器时，入口清理自动启动的仿真与桌面进程。
+
 
 `build.sh` 删除旧成功标记，初始化配置卷中的 profiles 目录，然后直接编译 `/ws/src` 中的共享源码：
 
@@ -268,7 +267,7 @@ python3 docker/merge-compile-commands.py
 | `init` | `true` | 使用容器 init 处理子进程回收和信号 |
 | `shm_size` | `1gb` | 容器 `/dev/shm` 上限，不是 Docker 总内存配置 |
 | `working_dir` | `/ws` | 容器中的工作区根目录 |
-| `command` | `bash docker/start.sh` | 容器实际启动入口 |
+| `command` | `bash docker/container.sh` | 管理桌面、自动启动仿真并保持容器运行 |
 
 ### 6.1 端口
 
@@ -296,6 +295,46 @@ HTTP 控制接口只提供任务启动、暂停和恢复等固定操作，并检
 从旧配置迁移时，先导出旧容器的 `/ws/src` 并合并其中独有的修改，再重新创建容器。旧的 `hiarm_source` 卷不再被挂载。迁移到 `catkin build` 后使用新的 `hiarm_catkin_build`、`hiarm_catkin_devel` 和 `hiarm_catkin_config` 卷；旧 `hiarm_build`、`hiarm_devel` 保留，不与新工具混用缓存。
 
 `stop` 和任务重新创建容器不会清空命名卷。日志在宿主机 `docker/logs` 中，但固定文件名可能被下一轮覆盖；要保留某轮结果，请先复制到单独目录。不要把删除卷当作普通重启步骤。
+
+### 容器内停止和重新启动仿真
+
+停止 ROS/Gazebo，保留容器和桌面：
+
+```bash
+pkill -TERM -x roslaunch
+```
+
+等待仿真进程清理完成，再在容器终端前台启动；该终端会持续显示启动状态，Ctrl+C 停止这次仿真：
+
+```bash
+bash /ws/docker/start.sh
+```
+
+脚本用锁防止重复启动。重新启动会重置场景；在另一个容器终端执行任务：
+
+```bash
+cd /ws
+source devel/setup.bash
+python3 -u docker/mission.py
+```
+
+主机的 `sim.sh mission` / `demo` 仍会重新创建容器，任务失败或 Ctrl+C 仍会执行 `compose down`；容器保活针对 ROS/Gazebo 自身退出，不改变主机任务命令的清理规则。
+
+### 容器内开发工具
+
+| 工具 | 用途 / 命令 |
+|---|---|
+| rqt_graph | 节点与话题连接：`rosrun rqt_graph rqt_graph` |
+| rqt_plot | 数值话题曲线：`rosrun rqt_plot rqt_plot` |
+| rqt_console | ROS 日志：`rosrun rqt_console rqt_console` |
+| rqt_reconfigure | dynamic_reconfigure 参数：`rosrun rqt_reconfigure rqt_reconfigure` |
+| rqt_image_view | 图像话题：`rosrun rqt_image_view rqt_image_view` |
+| rqt_topic | 话题浏览：`rqt --standalone rqt_topic` |
+| gdb | C/C++ 调试 |
+| vim-tiny、nano、less、ripgrep | 文件编辑、查看与 `rg` 搜索 |
+| procps、psmisc、iproute2、iputils-ping | `ps`、`pkill`、`pstree`、`ss`、`ip`、`ping` 排查 |
+
+图形工具显示在容器的 `DISPLAY=:1` 中，启用 `HIARM_DESKTOP=true` 后通过 noVNC 查看。停止 ROS 后，图形工具需要等待 ROS 重新启动才能获取节点和话题。
 
 ### 6.3 使用 VS Code 在容器中开发
 
@@ -453,7 +492,7 @@ WebGL FPS、Gazebo 实时因子、ROS 仿真时间是不同指标。网页 60 FP
 - 双击标题栏或点击最大化按钮，扩大应用窗口。
 - noVNC 控制栏可全屏；链接中的 `resize=scale` 对桌面进行本地缩放。
 
-当前 `start.sh` 的虚拟桌面分辨率为 **1920×1080、24 位色深**：
+当前 `container.sh` 的虚拟桌面分辨率为 **1920×1080、24 位色深**：
 
 ```bash
 Xvfb :1 -screen 0 1920x1080x24 +extension GLX +render -noreset
@@ -779,7 +818,8 @@ Compose 日志主要是容器启动输出。ROS/Gazebo 的详细输出已重定�
 | `Dockerfile` | 系统/ROS/图形依赖和基础环境 |
 | `compose.yaml` | 服务、开关、端口、卷与启动命令 |
 | `sim.sh` | Mac 端管理入口 |
-| `start.sh` | 容器服务编排、显示初始化、子进程清理 |
+| `container.sh` | 容器保活、显示与桌面初始化、自动启动仿真 |
+| `start.sh` | 工作区初始化、ROS/Gazebo 与 WebGL 服务、仿真子进程清理 |
 | `build.sh` | 配置 catkin_tools、用 catkin build 编译共享源码并更新成功标记 |
 | `sim.launch` | Gazebo、机器人、模拟飞控、控制器和规划器配置 |
 | `virtual_rc.py` | 仿真遥控输入 |

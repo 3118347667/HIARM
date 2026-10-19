@@ -33,7 +33,7 @@ services:
       - vscode_server:/root/.vscode-server
       - codex_data:/root/.codex
     working_dir: /ws
-    command: ["bash", "docker/start.sh"]
+    command: ["bash", "docker/container.sh"]
 volumes:
   catkin_build:
   catkin_devel:

@@ -19,6 +19,10 @@ wait_for_workspace() {
   echo 'Waiting for workspace build. Progress: docker compose -f docker/compose.yaml logs -f'
   # 成功标记由 build.sh 在编译完成后生成；此时才能加载环境和导入项目消息。
   until "${compose[@]}" exec -T sim test -f /ws/devel/.hiarm-build-ok 2>/dev/null; do
+    if "${compose[@]}" exec -T sim test -f /tmp/hiarm-start.exit 2>/dev/null; then
+      echo 'Simulation startup ended before workspace build completed; check container logs.' >&2
+      return 1
+    fi
     if ! running=$("${compose[@]}" ps --status running -q sim) || [[ -z "$running" ]]; then
       echo 'Simulation container stopped before workspace build completed; check container logs.' >&2
       return 1
