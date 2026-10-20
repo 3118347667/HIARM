@@ -28,3 +28,8 @@ __pycache__/
 .catkin_tools/
 /.playwright-cli/
 /output/playwright/
+docker/ros-one-jammy/vendor/
+build_catkin/
+logs_catkin/
+install_catkin/
+devel_catkin_make_backup/
