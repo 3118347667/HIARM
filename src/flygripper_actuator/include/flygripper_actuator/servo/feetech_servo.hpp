@@ -122,14 +122,14 @@ class FeetechServo {
   void enableTorque(bool enable, int id = -1){
     if (id == -1){
       for (auto &actuator_id_cmd : actuator_id_cmds_) {
-        feetech_interface_->EnableTorque(actuator_id_cmd.first, false);
+        feetech_interface_->EnableTorque(actuator_id_cmd.first, enable);
       }
     } else{
       auto id_cmd = actuator_id_cmds_.find(static_cast<unsigned int>(id));
       if (id_cmd != actuator_id_cmds_.end()){
         feetech_interface_->EnableTorque(id_cmd->first, enable);
       } else {
-        std::cerr << "Enable torque failed, given id " << id_cmd->first << "is not valid" << std::endl;
+        std::cerr << "Enable torque failed, given id " << id << " is not valid" << std::endl;
       }
     }
   }
