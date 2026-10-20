@@ -51,10 +51,11 @@ for cmd in ssh rsync; do
   command -v "$cmd" >/dev/null || { echo "Missing command: $cmd" >&2; exit 1; }
 done
 
-retry ssh "${ssh_options[@]}" "$target" "test \"\$(uname -m)\" = aarch64 && test -f /opt/ros/one/setup.bash && test -d '$remote_workspace' && mkdir -p '$remote_workspace/src' '$remote_workspace/scripts' '$remote_workspace/devel'"
-for directory in src scripts devel; do
+retry ssh "${ssh_options[@]}" "$target" "test \"\$(uname -m)\" = aarch64 && test -f /opt/ros/one/setup.bash && test -d '$remote_workspace' && mkdir -p '$remote_workspace/src' '$remote_workspace/scripts' '$remote_workspace/devel' '$remote_workspace/params'"
+for directory in src scripts devel params; do
   echo "Uploading $directory to $target..."
   retry rsync -az --timeout=90 --partial-dir=.rsync-partial --delay-updates \
+    --exclude='/.wifi_credentials' \
     -e "$rsync_ssh" "$workspace/$directory/" "$target:$remote_workspace/$directory/"
 done
 

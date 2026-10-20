@@ -1,0 +1,2 @@
+# Allow rock to activate only these two saved Wi-Fi profiles without a password.
+rock ALL=(root) NOPASSWD: /usr/bin/nmcli --wait 90 connection up id DIiffRobot_2_5G ifname wlan0, /usr/bin/nmcli --wait 90 connection up id dongbudemo ifname wlan0

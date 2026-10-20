@@ -76,8 +76,9 @@ cleanup_archive() {
 }
 trap cleanup_archive EXIT
 
-echo "Packing src, scripts, and devel..."
-COPYFILE_DISABLE=1 tar --no-xattrs -C "$workspace" -czf "$local_archive" src scripts devel
+echo "Packing src, scripts, devel, and params..."
+COPYFILE_DISABLE=1 tar --no-xattrs --exclude='scripts/.wifi_credentials' \
+  -C "$workspace" -czf "$local_archive" src scripts devel params
 local_hash=$(shasum -a 256 "$local_archive" | awk '{print $1}')
 adb -s "$serial" push "$local_archive" "$remote_archive"
 remote_hash=$(adb_shell_checked "sha256sum '$remote_archive'")

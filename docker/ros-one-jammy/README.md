@@ -62,7 +62,8 @@ The board IP is assigned dynamically. Set `BOARD_SSH_TARGET=rock@NEW_IP` or
 pass `rock@NEW_IP` as an argument to override the default SSH target.
 
 Both upload scripts check the local EKF architecture, then upload `src/`, `scripts/`,
-and `devel/` to the board's `/home/rock/dynamic_grasp` workspace.
+`devel/`, and `params/` to the board's `/home/rock/dynamic_grasp` workspace.
+The local `scripts/.wifi_credentials` file is excluded from both uploads.
 They verify that the workspace exists before copying, and check four key
 ARM64 files and missing dynamic libraries afterwards. They do not delete
 board-only files or start hardware. Stop running ROS nodes before updating the

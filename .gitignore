@@ -33,3 +33,7 @@ build_catkin/
 logs_catkin/
 install_catkin/
 devel_catkin_make_backup/
+params/backups/
+
+# Local legacy Wi-Fi credentials; never include in Git or board uploads
+scripts/.wifi_credentials
