@@ -1,10 +1,20 @@
-#!/bin/bash
-# Check if can0 interface is already up
-if ip link show can0 | grep -q "state UP"; then
-  echo "can0 interface is already up"
-else
-  # Set up the can0 interface
-  echo "${PASSWORD}" | sudo -S ip link set can0 type can bitrate 1000000
-  echo "${PASSWORD}" | sudo -S ifconfig can0 up
-  echo "can0 interface is set up and brought up"
+#!/usr/bin/env bash
+set -euo pipefail
+
+interface="${1:-can0}"
+if ip link show "$interface" | grep -q "state UP"; then
+  echo "$interface is already up"
+  exit 0
 fi
+
+if [[ "$EUID" -eq 0 ]]; then
+  ip link set "$interface" type can bitrate 1000000
+  ip link set "$interface" up
+elif sudo -n true 2>/dev/null; then
+  sudo -n ip link set "$interface" type can bitrate 1000000
+  sudo -n ip link set "$interface" up
+else
+  echo "Configuring $interface needs root. Run this setup as root once." >&2
+  exit 1
+fi
+echo "$interface is set up and brought up"

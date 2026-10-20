@@ -13,12 +13,12 @@ using TimeStamp = ros::Time;
 
 struct ActuatorState {
   using Ptr = std::shared_ptr<ActuatorState>;
-  uint16_t ecd;
-  uint16_t last_ecd;
+  int32_t ecd;
+  int32_t last_ecd;
   int16_t ecd_rpm;
 
-  int16_t current;
-  int16_t voltage;
+  double current;
+  double voltage;
 
   uint32_t seq = 0; // start from 0
   TimeStamp stamp;

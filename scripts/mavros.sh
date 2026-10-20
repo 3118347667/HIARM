@@ -11,7 +11,7 @@ QGC_PORT="${QGC_PORT:-14550}"
 
 echo "Start Running MAVROS！"
 echo "Forward MAVLink to QGC at ${QGC_IP}:${QGC_PORT}/UDP"
-sudo chmod +777 /dev/ttyACM0
+"${WORKSPACE_DIR}/scripts/require_serial_access.sh" /dev/ttyACM0
 roslaunch mavros apm.launch \
   fcu_url:=/dev/ttyACM0:57600 \
   gcs_url:=udp://@${QGC_IP}:${QGC_PORT} &

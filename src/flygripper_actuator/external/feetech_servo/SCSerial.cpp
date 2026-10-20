@@ -192,6 +192,8 @@ void SCSerial::wFlushSCS()
 
 void SCSerial::end()
 {
-	fd = -1;
-	close(fd);
+	if(fd != -1){
+		close(fd);
+		fd = -1;
+	}
 }

@@ -2,12 +2,12 @@
 set -e
 DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
 TARGET_RULE_FILE="can_motor.rules"
-TARGET_DEV_MODE="777"
+TARGET_DEV_MODE="0660"
 TARGET_DEV_NAME="ttyACM.*[0-9]"
 TARGET_DEV_LINK="CAN_MOTOR"
 TARGET_ID_VENDOR="2e88"
 TARGET_ID_PRODUCT="4603"
-UDEV_RULES="KERNEL==\"${TARGET_DEV_NAME::6}*\", ATTRS{idVendor}==\"${TARGET_ID_VENDOR}\", ATTRS{idProduct}==\"${TARGET_ID_PRODUCT}\", MODE:=\"${TARGET_DEV_MODE}\", SYMLINK+=\"${TARGET_DEV_LINK}\""
+UDEV_RULES="KERNEL==\"${TARGET_DEV_NAME::6}*\", ATTRS{idVendor}==\"${TARGET_ID_VENDOR}\", ATTRS{idProduct}==\"${TARGET_ID_PRODUCT}\", GROUP:=\"dialout\", MODE:=\"${TARGET_DEV_MODE}\", SYMLINK+=\"${TARGET_DEV_LINK}\""
 
 CHECK_UDEV_FILE(){
   if [ -f "/etc/udev/rules.d/${TARGET_RULE_FILE}" ]; then
@@ -31,20 +31,20 @@ CHECK_UDEV_FILE(){
 
 RELOAD_UDEV(){
   echo "[INFO]  Reload udev rules configuration"
-  sudo udevadm control --reload-rules
-  sudo udevadm trigger
+  udevadm control --reload-rules
+  udevadm trigger
 }
 
 CREATE_UDEV_FILE(){
   echo "[INFO]  Add udev rules file to /etc/udev/rules.d/${TARGET_RULE_FILE} with content:"
   echo ""
-  echo "${UDEV_RULES}" |sudo tee "/etc/udev/rules.d/${TARGET_RULE_FILE}"
+  echo "${UDEV_RULES}" > "/etc/udev/rules.d/${TARGET_RULE_FILE}"
   echo ""
 }
 
 DELETE_UDEV_FILE(){
   echo "[INFO]  Delete udev rules file /etc/udev/rules.d/${TARGET_RULE_FILE}"
-  sudo rm  "/etc/udev/rules.d/${TARGET_RULE_FILE}"
+  rm "/etc/udev/rules.d/${TARGET_RULE_FILE}"
 }
 
 CREATE_UDEV(){
@@ -183,7 +183,12 @@ HELP(){
   return 0
 }
 
-case $1 in
+if [[ "${1:-}" == create || "${1:-}" == delete ]] && [[ "$EUID" -ne 0 ]]; then
+  echo "Run this udev setup as root; no password is stored in the script." >&2
+  exit 1
+fi
+
+case ${1:-} in
    "create")
        CREATE_UDEV
        ;;

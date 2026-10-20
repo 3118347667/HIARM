@@ -19,7 +19,7 @@ if [ "$USE_SIM" == "true" ]; then
   roslaunch fake_mavros apm.launch mav_name:=${MAV_NAME} & sleep 1;
 else
   echo "Start Running MAVROS！"
-  sudo chmod +777 /dev/ttyACM0
+  "${CURRENT_DIR}/require_serial_access.sh" /dev/ttyACM0
   roslaunch mavros apm.launch & sleep 5;
 
   rosrun mavros mavsys message_interval --id=245  --rate=5; # common::EXTENDED_SYS_STATE

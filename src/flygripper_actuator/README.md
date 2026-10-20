@@ -1,4 +1,22 @@
 # Dependencies
+## UART servo permissions on the board
+
+`servo_node` requests FIFO priority 95. For the `rock` account, install
+`/etc/security/limits.d/90-rock-servo.conf` with:
+
+```text
+rock - rtprio 95
+```
+
+Reconnect SSH after installing the file. Confirm `ulimit -r` prints `95` and
+the account has read/write access to `/dev/ttyS4` through the `dialout` group.
+`launch_with_root.sh` then launches the UART servo as the current user without
+background password prompts. Other actuator configurations retain the sudo path.
+
+If `pub_morph.sh` has no effect, check
+`rostopic info /flygripper/actuator_command`:
+`/flygripper/servo_node` must appear as a subscriber.
+
 Install some tools
 ```shell
 sudo apt install -y python3-catkin-tools 

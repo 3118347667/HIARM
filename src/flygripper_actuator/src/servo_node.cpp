@@ -1,11 +1,13 @@
 #include "flygripper_actuator/servo/servo_control.hpp"
 #include "flygripper_common/utils/realtime.hpp"
+#include <csignal>
 
 using namespace flygripper_actuator::servo;
 
 int main(int argc, char** argv)
 {
   ros::init(argc, argv, "actuator_control_node");
+  std::signal(SIGTERM, [](int) { ros::requestShutdown(); });
   ros::NodeHandle nh;
   ros::NodeHandle pnh("~");
 
@@ -28,6 +30,8 @@ int main(int argc, char** argv)
     ActuatorControl actuator_control(nh, pnh);
     // Wait until shutdown signal received
     ros::waitForShutdown();
+    // Finish callbacks before closing the serial port or destroying their data.
+    spinner.stop();
     // Disable torque output for the servo
     actuator_control.shutdown();
   }

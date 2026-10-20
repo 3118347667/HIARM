@@ -34,6 +34,30 @@ echo "roslaunch command: ${ROSLAUNCH_CMD}"
 
 # fetch NODE_NAME_LIST
 source "${WORKSPACE_DIR}/devel/setup.bash"
+# UART servos only need serial access and permission to request FIFO priority 95.
+# Launch directly when those permissions are available; background sudo cannot
+# reliably request a password from a roslaunch child process.
+rtprio_limit="$(ulimit -r)"
+if [[ "$PACKAGE" == flygripper_actuator && "$LAUNCH_FILE" == servo.launch &&
+      "$ACTUATOR_BUS" == uart && -r "$ACTUATOR_INTERFACE" && -w "$ACTUATOR_INTERFACE" ]] &&
+   { [[ "$EUID" == 0 || "$rtprio_limit" == unlimited ]] || (( rtprio_limit >= 95 )); }; then
+  echo "Starting UART servo directly (rtprio limit: ${rtprio_limit})."
+  exec roslaunch "$PACKAGE" "$LAUNCH_FILE" "mav_name:=$MAV_NAME" \
+    "actuator_bus:=$ACTUATOR_BUS" "actuator_interface:=$ACTUATOR_INTERFACE"
+fi
+if [[ "$ACTUATOR_BUS" == uart ]]; then
+  echo "UART servo requires serial read/write access and rtprio 95." >&2
+  echo "Run scripts/setup_serial_permissions.sh as root once, then reconnect SSH." >&2
+  exit 1
+fi
+if [[ "$ACTUATOR_BUS" == socket_can ]] &&
+   { [[ "$EUID" == 0 || "$rtprio_limit" == unlimited ]] || (( rtprio_limit >= 95 )); } &&
+   ip link show "$ACTUATOR_INTERFACE" | grep -q "state UP"; then
+  echo "Starting CAN actuator directly (rtprio limit: ${rtprio_limit})."
+  exec roslaunch "$PACKAGE" "$LAUNCH_FILE" "mav_name:=$MAV_NAME" \
+    "actuator_bus:=$ACTUATOR_BUS" "actuator_interface:=$ACTUATOR_INTERFACE"
+fi
+
 NODE_NAME_LIST=$(${ROSLAUNCH_CMD} --nodes)
 if [ $? -eq 0 ]; then
   # Extract individual node names and build the rosnode kill command
@@ -54,12 +78,13 @@ if [ "$ACTUATOR_BUS" == "socket_can" ]; then
     echo "${ACTUATOR_INTERFACE} interface is already up"
   else
     # Set up the can0 interface
-    sudo -S ip link set ${ACTUATOR_INTERFACE} type can bitrate 1000000
-    sudo -S ifconfig ${ACTUATOR_INTERFACE} up
+    sudo -n ip link set "${ACTUATOR_INTERFACE}" type can bitrate 1000000 || {
+      echo "CAN setup needs root; configure it once before starting ROS." >&2
+      exit 1
+    }
+    sudo -n ip link set "${ACTUATOR_INTERFACE}" up
     echo "can0 interface is set up and brought up"
   fi
-elif [ "$ACTUATOR_BUS" == "socket_can" ]; then
-  sudo chmod +777 ${ACTUATOR_INTERFACE}
 fi
 
 function signal_handle() {
@@ -69,7 +94,7 @@ function signal_handle() {
 }
 trap signal_handle SIGINT SIGTERM
 
-sudo -S bash -c "source '${WORKSPACE_DIR}/devel/setup.bash' && exec ${ROSLAUNCH_CMD}" &
+sudo -n bash -c "source '${WORKSPACE_DIR}/devel/setup.bash' && exec ${ROSLAUNCH_CMD}" &
 launcher_pid=$!
 wait "$launcher_pid"
 status=$?

@@ -9,7 +9,7 @@ MOCAP_IP="10.1.1.198"
 RUN_MODE="${1:-}"
 
 echo "Start Running MAVROS！"
-sudo chmod +777 /dev/ttyACM0
+"${WORKSPACE_DIR}/scripts/require_serial_access.sh" /dev/ttyACM0 || exit 1
 roslaunch mavros apm.launch &
 sleep 10 # wait roscore
 echo "Start Running Ctrl！"

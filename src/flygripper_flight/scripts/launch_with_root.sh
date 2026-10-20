@@ -42,7 +42,7 @@ function signal_handle() {
 }
 trap signal_handle SIGINT SIGTERM
 
-sudo -S bash -ic "source '${HOME}/.bashrc' && source '${WORKSPACE_DIR}/devel/setup.bash' && ${ROSLAUNCH_CMD}" &
-echo "--------------------- Launch with root privilege successfully -------------------"
-wait
-echo "--------------------- Launch with root privilege terminate ----------------------"
+echo "Starting flight nodes as $(id -un)."
+bash -ic "source '${WORKSPACE_DIR}/devel/setup.bash' && exec ${ROSLAUNCH_CMD}" &
+launcher_pid=$!
+wait "$launcher_pid"

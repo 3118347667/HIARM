@@ -19,7 +19,7 @@ sleep 4
 
 if [ "$USE_SIM" == "false" ]; then
   echo "Start Running MAVROS！"
-  sudo chmod +777 /dev/ttyS7
+  "${CURRENT_DIR}/require_serial_access.sh" /dev/ttyS7
   #roslaunch mavros apm.launch & sleep 5;
   roslaunch mavros apm.launch fcu_url:=/dev/ttyS7:921600 &
   sleep 5

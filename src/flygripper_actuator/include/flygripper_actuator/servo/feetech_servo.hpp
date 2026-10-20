@@ -74,8 +74,12 @@ class FeetechServo {
       actuator_state.overload = feetech_interface_->ReadState(-1) & 0x20;
 
       if (actuator_state.seq != 0) {
-        // Update round
-        if (actuator_state.ecd - actuator_state.last_ecd > 2048)
+        // Signed absolute multi-turn feedback already contains the turn count.
+        // Only unwrap feedback when both samples are in the single-turn range.
+        if (actuator_state.ecd < 0 || actuator_state.ecd >= 4096 ||
+            actuator_state.last_ecd < 0 || actuator_state.last_ecd >= 4096)
+          actuator_state.round = 0;
+        else if (actuator_state.ecd - actuator_state.last_ecd > 2048)
           actuator_state.round--;
         else if (actuator_state.ecd - actuator_state.last_ecd < -2048)
           actuator_state.round++;
@@ -135,6 +139,10 @@ class FeetechServo {
   }
 
   void terminate() {
+    if (terminated_) {
+      return;
+    }
+    terminated_ = true;
     for (auto &actuator_id_cmd : actuator_id_cmds_) {
       feetech_interface_->EnableTorque(actuator_id_cmd.first, false);
     }
@@ -163,6 +171,7 @@ class FeetechServo {
 
  private:
 
+  bool terminated_ = false;
   std::shared_ptr<SMS_STS> feetech_interface_;
 
   std::unordered_map<uint32_t, ActuatorParam> actuator_id_params_;

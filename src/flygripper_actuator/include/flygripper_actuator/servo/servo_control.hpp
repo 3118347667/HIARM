@@ -44,8 +44,8 @@ class ActuatorControl {
     actuator_ = std::make_shared<FeetechServo>(params_.actuator_interface,
                                                params_.baud_rate, 95);
     actuator_->config(params_.actuator_id, params_.actuator_product, params_.actuator_param);
-    actuator_state_.reset(actuator_->getState(static_cast<uint32_t>(params_.actuator_id)));
-    actuator_command_.reset(actuator_->getCommand(static_cast<uint32_t>(params_.actuator_id)));
+    actuator_state_ = actuator_->getState(static_cast<uint32_t>(params_.actuator_id));
+    actuator_command_ = actuator_->getCommand(static_cast<uint32_t>(params_.actuator_id));
 
     command_sub_ = nh.subscribe("actuator_command", 1, &ActuatorControl::commandCallback, this);
     rc_in_sub_ = nh.subscribe("/mavros/rc/in", 1, &ActuatorControl::RcInCallback, this);
@@ -63,6 +63,7 @@ class ActuatorControl {
   }
 
   void shutdown(){
+    control_timer_.stop();
     actuator_->terminate();
   }
 
@@ -221,8 +222,9 @@ class ActuatorControl {
   Parameters params_;
 
   FeetechServo::Ptr actuator_;
-  ActuatorState::Ptr actuator_state_;
-  ActuatorCommand::Ptr actuator_command_;
+  // Borrowed from actuator_'s maps; only FeetechServo owns these objects.
+  ActuatorState* actuator_state_ = nullptr;
+  ActuatorCommand* actuator_command_ = nullptr;
 
 };
 }
