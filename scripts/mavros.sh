@@ -1,16 +1,20 @@
 #!/bin/bash
 set -e
-# SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# cd ${SCRIPT_PATH}/../bags && ./bag.sh
-
-source "devel/setup.bash"
+WORKSPACE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+source "${WORKSPACE_DIR}/devel/setup.bash"
 MAV_NAME="flygripper" #"robot"
 USE_SIM="false"       #"false"
 GUI="false"
+# QGC_IP="${QGC_IP:-10.1.1.108}"
+QGC_IP="${QGC_IP:-192.168.71.213}"
+QGC_PORT="${QGC_PORT:-14550}"
 
 echo "Start Running MAVROS！"
+echo "Forward MAVLink to QGC at ${QGC_IP}:${QGC_PORT}/UDP"
 sudo chmod +777 /dev/ttyACM0
-roslaunch mavros apm.launch fcu_url:=/dev/ttyACM0:57600 &
+roslaunch mavros apm.launch \
+  fcu_url:=/dev/ttyACM0:57600 \
+  gcs_url:=udp://@${QGC_IP}:${QGC_PORT} &
 sleep 15 # wait roscore
 
 rosrun mavros mavsys message_interval --id=27 --rate=333    # common::RAW_IMU
