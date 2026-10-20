@@ -1,8 +1,5 @@
 #!/bin/bash
 set -x
-# SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-# cd ${SCRIPT_PATH}/../bags && ./bag.sh
-
 WORKSPACE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "${WORKSPACE_DIR}/devel/setup.bash"
 MAV_NAME="flygripper" #"robot"
@@ -53,4 +50,4 @@ wait;
 
 #sleep 1
 #echo "Start Recording ROSbag..."
-#(cd ~/dynamic_grasp/bags && ./bag.sh)
+#(cd "${WORKSPACE_DIR}/bags" && ./bag.sh)

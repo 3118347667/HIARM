@@ -11,7 +11,7 @@ else
   MAV_NAME=$1
 fi
 
-source "${CURRENT_DIR}/devel/setup.bash"
+source "${CURRENT_DIR}/../devel/setup.bash"
 
 echo "Start Running URDF and SERVO！"
 roslaunch flygripper_bringup run.launch mav_name:=${MAV_NAME} use_sim:=${USE_SIM} gui:=${GUI} &

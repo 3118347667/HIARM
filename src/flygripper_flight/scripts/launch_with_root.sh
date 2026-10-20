@@ -7,9 +7,12 @@ MAV_NAME=$3
 USE_SIM=$4
 
 ROSLAUNCH_CMD="roslaunch ${PACKAGE} ${LAUNCH_FILE} mav_name:=${MAV_NAME} use_sim:=${USE_SIM}"
-# Find catkin workspace root directory
-cd ${CURRENT_DIR}
-WORKSPACE_DIR="$(catkin locate)"
+# This script lives at <workspace>/src/flygripper_flight/scripts.
+WORKSPACE_DIR="$(cd "${CURRENT_DIR}/../../.." && pwd)"
+if [[ ! -f "${WORKSPACE_DIR}/devel/setup.bash" ]]; then
+    echo "Missing catkin setup: ${WORKSPACE_DIR}/devel/setup.bash" >&2
+    exit 1
+fi
 
 echo "home directory: ${HOME}"
 echo "workspace directory: ${WORKSPACE_DIR}"
@@ -18,7 +21,7 @@ echo "use_sim: ${USE_SIM}"
 echo "roslaunch command: ${ROSLAUNCH_CMD}"
 
 # fetch NODE_NAME_LIST
-source ${WORKSPACE_DIR}/devel/setup.bash
+source "${WORKSPACE_DIR}/devel/setup.bash"
 NODE_NAME_LIST=$(${ROSLAUNCH_CMD} --nodes)
 if [ $? -eq 0 ]; then
   # Extract individual node names and build the rosnode kill command
@@ -39,7 +42,7 @@ function signal_handle() {
 }
 trap signal_handle SIGINT SIGTERM
 
-sudo -S bash -ic "source ${HOME}/.bashrc && source ${WORKSPACE_DIR}/devel/setup.bash && ${ROSLAUNCH_CMD}" &
+sudo -S bash -ic "source '${HOME}/.bashrc' && source '${WORKSPACE_DIR}/devel/setup.bash' && ${ROSLAUNCH_CMD}" &
 echo "--------------------- Launch with root privilege successfully -------------------"
 wait
 echo "--------------------- Launch with root privilege terminate ----------------------"

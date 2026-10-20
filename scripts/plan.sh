@@ -14,7 +14,7 @@ else
   MAV_NAME=$1
 fi
 
-source "${CURRENT_DIR}/devel/setup.bash"
+source "${CURRENT_DIR}/../devel/setup.bash"
 
 echo "Start Running Program！"
 roslaunch poly_planner eight.launch mav_name:=${MAV_NAME} use_sim:=${USE_SIM} & sleep 1;

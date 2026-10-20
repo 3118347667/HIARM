@@ -7,26 +7,24 @@ ACTUATOR_BUS=$4
 ACTUATOR_INTERFACE=$5
 ROSLAUNCH_CMD="roslaunch ${PACKAGE} ${LAUNCH_FILE} mav_name:=${MAV_NAME} actuator_bus:=${ACTUATOR_BUS} actuator_interface:=${ACTUATOR_INTERFACE}"
 # Find catkin workspace root directory
-cd ${CURRENT_DIR}
+cd "${CURRENT_DIR}"
 # Function to find catkin workspace root directory
 find_catkin_workspace() {
   local current_dir="${CURRENT_DIR}"
   local ws_dir="$current_dir"
 
-  while [ ! -d "$ws_dir/devel" ] && [ "$ws_dir" != "/" ]; do
+  while [ ! -f "$ws_dir/devel/setup.bash" ] && [ "$ws_dir" != "/" ]; do
     ws_dir="$(dirname "$ws_dir")"
   done
 
-  if [ ! -d "$ws_dir/devel" ]; then
-    echo "Error: Could not find ROS workspace devel directory" >&2
+  if [ ! -f "$ws_dir/devel/setup.bash" ]; then
+    echo "Error: Could not find ROS workspace devel/setup.bash" >&2
     return 1
   fi
 
   echo "$ws_dir"
 }
-#WORKSPACE_DIR="$(find_catkin_workspace)"
-WORKSPACE_DIR="$HOME/dynamic_grasp"
-#WORKSPACE_DIR="$(catkin locate)"
+WORKSPACE_DIR="$(find_catkin_workspace)" || exit 1
 
 echo "home directory: ${HOME}"
 echo "workspace directory: ${WORKSPACE_DIR}"
@@ -35,7 +33,7 @@ echo "actuator interface: ${ACTUATOR_INTERFACE}"
 echo "roslaunch command: ${ROSLAUNCH_CMD}"
 
 # fetch NODE_NAME_LIST
-source ${WORKSPACE_DIR}/devel/setup.bash
+source "${WORKSPACE_DIR}/devel/setup.bash"
 NODE_NAME_LIST=$(${ROSLAUNCH_CMD} --nodes)
 if [ $? -eq 0 ]; then
   # Extract individual node names and build the rosnode kill command
@@ -71,7 +69,9 @@ function signal_handle() {
 }
 trap signal_handle SIGINT SIGTERM
 
-sudo -S bash -ic "source ${HOME}/.bashrc && source ${WORKSPACE_DIR}/devel/setup.bash && ${ROSLAUNCH_CMD}" &
-echo "--------------------- Launch with root privilege successfully -------------------"
-wait
-echo "--------------------- Launch with root privilege terminate ----------------------"
+sudo -S bash -c "source '${WORKSPACE_DIR}/devel/setup.bash' && exec ${ROSLAUNCH_CMD}" &
+launcher_pid=$!
+wait "$launcher_pid"
+status=$?
+echo "--------------------- Launch with root privilege exited: ${status} ----------------------"
+exit "$status"

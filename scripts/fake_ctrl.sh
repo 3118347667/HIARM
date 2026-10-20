@@ -12,7 +12,7 @@ else
   MAV_NAME=$1
 fi
 
-source "${CURRENT_DIR}/devel/setup.bash"
+source "${CURRENT_DIR}/../devel/setup.bash"
 
 echo "Start Running Program！"
 if [ "$USE_SIM" == "true" ]; then
