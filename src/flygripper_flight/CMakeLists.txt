@@ -14,6 +14,14 @@ find_package(catkin REQUIRED COMPONENTS
 find_package(Threads REQUIRED)
 find_package(Eigen3 REQUIRED)
 
+if(CATKIN_ENABLE_TESTING)
+  add_executable(test_takeoff test/test_takeoff.cpp)
+  target_include_directories(test_takeoff PRIVATE include)
+  add_test(NAME takeoff_profile COMMAND test_takeoff)
+  find_package(rostest REQUIRED)
+  add_rostest(test/auto_takeoff.test)
+endif()
+
 generate_dynamic_reconfigure_options(
         cfg/RosFsmParameter.cfg
 )

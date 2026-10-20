@@ -74,20 +74,23 @@ public:
     }
   }
 
-  void getTakeoffReference(const RobotState &robot_state,
+  void getTakeoffReference(const TakeoffPlan &plan,
                            ReferenceVector &references,
                            const Scalar &current_stamp,
-                           const RobotCommandMode &command_mode,
-                           const Scalar &takeoff_height) {
-    // TODO: reimplement using min snap for takeoff state
-    static Vector<3> takeoff_position(robot_state.pos.x(), robot_state.pos.y(),
-                                      takeoff_height);
-    static Scalar takeoff_yaw(robot_state.getYaw(0.0));
+                           const RobotCommandMode &command_mode) {
     references.resize(horizon_len_);
     Scalar stamp = current_stamp; // robot_state.stamp;
     for (auto &reference : references) {
       //! Reference State
-      reference.state = RobotState(stamp, takeoff_position, takeoff_yaw);
+      const auto sample = plan.sample(stamp);
+      reference.state = RobotState(stamp);
+      for (int axis = 0; axis < 3; ++axis)
+        reference.state.pos(axis) = sample.position[axis];
+      reference.state.setQ(sample.yaw);
+      reference.state.vel.z() = sample.velocity;
+      reference.state.acc.z() = sample.acceleration;
+      reference.state.jerk.z() = sample.jerk;
+      reference.state.snap.z() = sample.snap;
       //! Reference Input
       reference.input = RobotCommand(stamp, command_mode);
       stamp += horizon_dt_;

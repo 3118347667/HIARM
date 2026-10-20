@@ -15,11 +15,11 @@ class FcState{
   FcState() {}
   ~FcState() = default;
 
-  bool connected;
-  bool armed;
-  bool ground;
-  bool guided;
-  bool manual;
+  bool connected{false};
+  bool armed{false};
+  bool ground{false};
+  bool guided{false};
+  bool manual{false};
   std::string mode;
 
   inline bool isReceived(const Scalar &now, Scalar timeout=5.0) const{

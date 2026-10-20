@@ -25,7 +25,7 @@ rosrun mavros mavsys message_interval --id=65 --rate=100    # common::RC_CHANNEL
 #rosrun mavros mavsys message_interval --id=147 --rate=100   # common::BATTERY_STATUS
 #rosrun mavros mavsys message_interval --id=250 --rate=100   #DEBUG_VECTOR
 #rosrun mavros mavsys message_interval --id=385 --rate=100   #TUNNEL
-#rosrun mavros mavsys message_interval --id=245 --rate=5     # common::EXTENDED_SYS_STATE
+rosrun mavros mavsys message_interval --id=245 --rate=5     # common::EXTENDED_SYS_STATE (takeoff ground check)
 #rosrun mavros mavsys message_interval --id=100 --rate=50    # optical_flow
 #rosrun mavros mavsys message_interval --id=100 --rate=100    # optical_flow
 rosrun mavros mavsys message_interval --id=30 --rate=333    # common::ATTITUDE

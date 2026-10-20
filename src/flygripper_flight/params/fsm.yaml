@@ -15,8 +15,21 @@ controller: 0 #0: Geometric, 1: NMPC
 command_mode: 0 # 0: Attitude, 1: Body Rate, 2: Rotor Thrust, 3: Body Rate Customized
 
 # Guided Mode
-auto_takeoff: false # Enable takeoff (else hovering) while switching to GUIDED MODE
-takeoff_height: 1.0 # Takeoff height
+auto_takeoff: true # Ground + armed + CH5 rising edge => relative-height takeoff
+takeoff_height: 1.0 # Rise above the position recorded for this takeoff [m]
+takeoff_velocity: 0.25 # Vertical reference limit [m/s]
+takeoff_acceleration: 0.3 # Vertical reference limit [m/s^2]
+takeoff_jerk: 1.0 # Vertical reference limit [m/s^3]
+takeoff_position_tolerance: 0.08 # 3D target error [m]
+takeoff_velocity_tolerance: 0.1 # Measured speed for completion [m/s]
+takeoff_settle_time: 1.0 # Target and velocity must remain within tolerance [s]
+takeoff_liftoff_timeout: 6.0 # Abort if no measured liftoff [s]
+takeoff_timeout: 20.0 # Must exceed profile duration plus settling time [s]
+takeoff_max_tracking_error: 0.5 # Abort for excessive 3D reference error [m]
+takeoff_start_speed_max: 0.2 # Maximum speed while on the ground [m/s]
+extended_state_timeout: 1.0 # Landed-state freshness [s]
+mode_switch_timeout: 3.0 # Wait for /mavros/state confirmation [s]
+handover_mode: ALT_HOLD # CH5 off or a fault returns altitude control to APM
 
 # Traj Mode
 traj_trigger: true # Publish trigger while switching to TRAJ MODE

@@ -1,5 +1,7 @@
 # dynamic_grasp 真机工作区
 
+自动起飞分支：真机在遥控器解锁后，由 CH5 触发相对高度起飞并悬停。操作、参数、接管和验证范围见 [ArduPilot 自动起飞说明](docs/auto_takeoff.md)。
+
 此分支于 2026-10-19 从本地 `dynamic_grasp` 工作区导入源码快照，作为与 HIARM 仿真分支无共同提交历史的独立分支。源目录没有 Git 元数据，因此不包含此前的提交历史。
 
 - `src/`：ROS/catkin 软件包。

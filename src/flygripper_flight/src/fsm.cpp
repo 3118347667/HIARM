@@ -5,6 +5,7 @@
 #include "flygripper_common/utils/runtime_profiler.hpp"
 #include "flygripper_msgs/GraspState.h"
 #include "mavros_msgs/SetMode.h"
+#include "mavros_msgs/ParamGet.h"
 
 namespace flygripper_flight {
 Fsm::Fsm(ros::NodeHandle &nh, ros::NodeHandle &pnh) {
@@ -60,8 +61,7 @@ Fsm::Fsm(ros::NodeHandle &nh, ros::NodeHandle &pnh) {
 
   //! default state and reference type
   fsm_state_ = FsmState::STATE_MANUAL;
-  ref_type_ = fsm_param_->auto_takeoff ? ReferenceType::TYPE_TAKEOFF
-                                       : ReferenceType::TYPE_HOVER;
+  ref_type_ = ReferenceType::TYPE_HOVER;
   ROS_INFO("\033[32mInitial State: %s, Type: %s.\033[32m",
            FsmStateToString(fsm_state_).c_str(),
            ReferenceTypeToString(ref_type_).c_str());
@@ -73,11 +73,19 @@ Fsm::Fsm(ros::NodeHandle &nh, ros::NodeHandle &pnh) {
   sampler_ = std::make_shared<Sampler>(robot_param_, fsm_param_);
   controller_ = std::make_shared<GeometricController>(
       robot_param_, fsm_param_->loop_frequency);
+  loop_timer_ = nh.createTimer(ros::Duration(1.0 / fsm_param_->loop_frequency),
+                               &Fsm::controlLoop, this);
 }
 
 Fsm::~Fsm() { publishZeroCommand(); };
 
 void Fsm::publishZeroCommand() {
+  // Zero thrust is a motor-stop command with GUID_OPTIONS bit 3 set.
+  // A process exit is not a landing; let the FCU handle loss of setpoints.
+  if (robot_command_.rotor_mode == RobotCommandMode::MODE_ATTITUDE) {
+    ROS_WARN("Leaving attitude-output FCU to pilot/Guided timeout; no zero thrust sent.");
+    return;
+  }
   ROS_WARN("Start Shutting down");
   robot_command_.setZero();
   if (robot_command_.rotor_mode == RobotCommandMode::MODE_SINGLE_ROTOR) {
@@ -126,6 +134,11 @@ void Fsm::rosSetup(ros::NodeHandle &nh) {
       ros::VoidConstPtr(), &update_queue_);
   fc_state_options_.transport_hints = ros::TransportHints().tcpNoDelay();
   fc_state_sub_ = nh.subscribe(fc_state_options_);
+  extended_state_options_ = ros::SubscribeOptions::create<mavros_msgs::ExtendedState>(
+      "/mavros/extended_state", 10,
+      boost::bind(&Fsm::rosExtendedStateCallback, this, _1),
+      ros::VoidConstPtr(), &update_queue_);
+  extended_state_sub_ = nh.subscribe(extended_state_options_);
   //! odom
   odom_options_ = ros::SubscribeOptions::create<nav_msgs::Odometry>(
       "odom", 10, boost::bind(&Fsm::rosOdomCallback, this, _1),
@@ -190,17 +203,19 @@ void Fsm::rosSetup(ros::NodeHandle &nh) {
       "geometric_controller/data", 10);
   mavros_setmode_srv_ =
       nh.serviceClient<mavros_msgs::SetMode>("/mavros/set_mode");
+  mavros_getparam_srv_ =
+      nh.serviceClient<mavros_msgs::ParamGet>("/mavros/param/get");
 
-  loop_timer_ = nh.createTimer(ros::Duration(1.0 / fsm_param_->loop_frequency),
-                               &Fsm::controlLoop, this);
 }
 
 void Fsm::rosOdomCallback(nav_msgs::OdometryConstPtr msg) {
   fromRosMsg(msg, odom_);
+  odom_.stamp = msg->header.stamp.toSec();
 }
 
 void Fsm::rosImuCallback(sensor_msgs::ImuConstPtr msg) {
   fromRosMsg(msg, imu_);
+  imu_.stamp = msg->header.stamp.toSec();
 }
 
 void Fsm::rosActuatorStateCallback(flygripper_msgs::ActuatorStateConstPtr msg) {
@@ -224,6 +239,11 @@ void Fsm::rosFcStateCallback(mavros_msgs::StateConstPtr msg) {
   fromRosMsg(msg, fc_state_);
 }
 
+void Fsm::rosExtendedStateCallback(mavros_msgs::ExtendedStateConstPtr msg) {
+  extended_state_ = *msg;
+  extended_state_stamp_ = ros::Time::now().toSec();
+}
+
 void Fsm::rosTrajCallback(flygripper_msgs::PolynomialTrajectoryConstPtr msg) {
   fromRosMsg(msg, trajectory_);
 }
@@ -235,12 +255,36 @@ void Fsm::controlLoop(const ros::TimerEvent &event) {
   now_ = event.current_real.toSec();
   //! [ROS] Update all ros callback functions to update data and parameters.
   update_queue_.callAvailable();
+  now_ = ros::Time::now().toSec();
   updateParameter();
   //    ROS_INFO_STREAM("Param: "<< *robot_param_);
-  robot_command_.rotor_mode = fsm_param_->command_mode;
+  robot_command_.rotor_mode = fsm_state_ == FsmState::STATE_MANUAL
+      ? fsm_param_->command_mode : session_command_mode_;
+  // A pilot/FCU mode change always wins. Never switch back over a failsafe.
+  if (fsm_state_ != FsmState::STATE_MANUAL &&
+      fsm_state_ != FsmState::STATE_WAIT_GUIDED && fcStateFresh() &&
+      (!fc_state_.armed || fc_state_.mode != "GUIDED_NOGPS")) {
+    stopAutonomy();
+    return;
+  }
   //! Update robot_state, fc_state and rc_input
   if (!updateRobotState()) {
+    if (fsm_state_ == FsmState::STATE_MANUAL) {
+      // An edge while inputs are unhealthy must not become a deferred takeoff.
+      rc_input_.resetGuidedModeTrigger();
+      rc_input_.resetTrajModeTrigger();
+    } else {
+      if (fsm_state_ != FsmState::STATE_HANDOVER)
+        beginHandover("Required IMU/odometry/RC/FCU data missing or invalid");
+      updateHandover();
+    }
     return;
+  }
+  if (fsm_state_ == FsmState::STATE_HANDOVER) {
+    updateHandover();
+    // Retain a bounded hover command while waiting for FCU takeover, only
+    // while all controller inputs are still valid. Never send zero thrust.
+    if (fsm_state_ != FsmState::STATE_HANDOVER) return;
   }
   tic_toc_.toc("ros_update");
 
@@ -252,8 +296,10 @@ void Fsm::controlLoop(const ros::TimerEvent &event) {
   //! Controller preparation
   controller_->prepare(robot_state_);
   //! Rotor control process for guided and traj mode
-  if (fsm_state_ == FsmState::STATE_GUIDED ||
-      fsm_state_ == FsmState::STATE_TRAJ) {
+  if ((fsm_state_ == FsmState::STATE_GUIDED ||
+      fsm_state_ == FsmState::STATE_TRAJ ||
+      fsm_state_ == FsmState::STATE_HANDOVER) &&
+      fc_state_.armed && fc_state_.mode == "GUIDED_NOGPS") {
     //! Controller execution
     static flygripper_common::RuntimeProfiler control_profiler(
         "trajectory_tracking_control", 1000);
@@ -328,6 +374,13 @@ void Fsm::controlLoop(const ros::TimerEvent &event) {
             robot_command_.attitude; // Align with FCU Frame
         robot_command_.collective_thrust_command = thrust_acc_map_.map(
             robot_command_.collective_thrust / robot_param_->mass);
+        if (!std::isfinite(robot_command_.collective_thrust_command) ||
+            !robot_command_.attitude_command.coeffs().allFinite()) {
+          beginHandover("Non-finite attitude/thrust command");
+          return;
+        }
+        robot_command_.collective_thrust_command =
+            std::clamp(robot_command_.collective_thrust_command, 0.0, 1.0);
         toRosMsg(robot_command_, thrust_att_command_msg_);
         thrust_att_command_pub_.publish(thrust_att_command_msg_);
       } else {
@@ -388,6 +441,8 @@ bool Fsm::updateRobotState() {
     ret = false;
     ROS_WARN("Odometry data invalid!");
   }
+  ret &= std::abs(imu_.att.norm() - 1.0) < 0.05 &&
+         std::abs(odom_.att.norm() - 1.0) < 0.05;
 
   if (!rotor_speed_.isReceived(now_, fsm_param_->rotor_speed_timeout)) {
     //ret = false;
@@ -404,9 +459,9 @@ bool Fsm::updateRobotState() {
     robot_state_.setQ(odom_.att);
     robot_state_.vel = odom_.vel;
     // from imu
-    if (last_imu_stamp < 0) {
+    if (last_imu_stamp < 0 || imu_.stamp < last_imu_stamp) {
       robot_state_.alpha = Vector<3>::Zero();
-    } else {
+    } else if (imu_.stamp - last_imu_stamp > 1e-6) {
       robot_state_.alpha = 1 / (imu_.stamp - last_imu_stamp) *
                            (imu_.omega - robot_state_.omega); // body frame
     }
@@ -414,7 +469,10 @@ bool Fsm::updateRobotState() {
     robot_state_.omega = imu_.omega;                          // body frame
     robot_state_.acc = odom_.att * imu_.acc + kGravityVector; // world frame
     // from rotor speed
-    robot_state_.rot_speed = rotor_speed_.rot_speed;
+    // Attitude output does not require ESC feedback. Do not seed the
+    // controller's diagnostic filters with infinities when ESC is absent.
+    robot_state_.rot_speed = rotor_speed_.valid()
+        ? rotor_speed_.rot_speed : Vector<4>::Zero();
 
     if (actuator_state_.isReceived(now_, fsm_param_->actuator_state_timeout) &&
         actuator_state_.valid()) {
@@ -455,7 +513,12 @@ bool Fsm::updateRobotState() {
     //ret = false;
     ROS_WARN("Battery data invalid!");
   }
-  ret &= fc_state_.isReceived(now_, fsm_param_->fc_state_timeout);
+  ret &= fcStateFresh();
+  ret &= imu_.stamp > 0.0 && now_ >= imu_.stamp &&
+         odom_.stamp > 0.0 && now_ >= odom_.stamp;
+  if (robot_command_.rotor_mode == RobotCommandMode::MODE_SINGLE_ROTOR)
+    ret &= rotor_speed_.isReceived(now_, fsm_param_->rotor_speed_timeout) &&
+           rotor_speed_.valid();
   return ret;
 }
 
@@ -465,39 +528,72 @@ void Fsm::updateFsmStateAndReference() {
     //! [STATE] MANUAL => ...
     if (rc_input_.isGuidedModeTriggered()) {
       rc_input_.resetGuidedModeTrigger();
-      // Check if robot velocity is too large
-      if (robot_state_.vel.norm() > kMaxVelocityToHoverMode) {
-        ROS_ERROR("REJECT MANUAL => GUIDED: Robot velocity %f is too large!",
-                  robot_state_.vel.norm());
-        break;
-      }
-      // Set fc guided mode via mavros
-      if (!setFcGuidedMode(true)) {
-        break;
-      }
-      //! [STATE] MANUAL -> GUIDED triggered by rc
-      setFsmState(FsmState::STATE_GUIDED);
-      //! [TYPE] ANY -> TAKEOFF/HOVER
-      setReferenceType(fsm_param_->auto_takeoff ? ReferenceType::TYPE_TAKEOFF
-                                                : ReferenceType::TYPE_HOVER);
-      //! NOTE: assign the FIRST reference state from robot_state, DO NOT
-      //! CHANGE
-      sampler_->getHoverReference(robot_state_, references_, now_,
-                                  robot_command_.rotor_mode, true);
+      if (!prepareGuidedEntry()) break;
+      velocity_teleop_ready_ = false;
+      session_command_mode_ = robot_command_.rotor_mode;
+      mode_request_start_ = now_;
+      last_mode_request_ = -INF;
+      setFsmState(FsmState::STATE_WAIT_GUIDED);
     }
     break;
   }
+  case FsmState::STATE_WAIT_GUIDED: {
+    if (!rc_input_.isGuidedMode() || !fc_state_.armed) {
+      beginHandover("Guided entry cancelled or FCU disarmed");
+      break;
+    }
+    if (fc_state_.mode == "GUIDED_NOGPS") {
+      if (takeoff_requested_) {
+        if (!std::isfinite(extended_state_stamp_) ||
+            now_ - extended_state_stamp_ > fsm_param_->extended_state_timeout ||
+            extended_state_.landed_state != mavros_msgs::ExtendedState::LANDED_STATE_ON_GROUND ||
+            robot_state_.vel.norm() > fsm_param_->takeoff_start_speed_max) {
+          beginHandover("Ground state changed while waiting for GUIDED_NOGPS");
+          break;
+        }
+        auto settings = fsm_param_->takeoff;
+        settings.height = fsm_param_->takeoff_height;
+        if (!takeoff_plan_.start({robot_state_.pos.x(), robot_state_.pos.y(),
+                                 robot_state_.pos.z()}, robot_state_.getYaw(), now_, settings)) {
+          beginHandover("Invalid takeoff limits or timeout too short for ascent");
+          break;
+        }
+        ROS_INFO("Takeoff: relative height %.2f m, profile %.2f s",
+                 settings.height, takeoff_plan_.duration());
+        setReferenceType(ReferenceType::TYPE_TAKEOFF);
+        sampler_->getTakeoffReference(takeoff_plan_, references_, now_,
+                                      robot_command_.rotor_mode);
+      } else {
+        setReferenceType(ReferenceType::TYPE_HOVER);
+        sampler_->getHoverReference(robot_state_, references_, now_,
+                                    robot_command_.rotor_mode, true);
+      }
+      setFsmState(FsmState::STATE_GUIDED);
+      break;
+    }
+    if (now_ < mode_request_start_ ||
+        now_ - mode_request_start_ > fsm_param_->mode_switch_timeout) {
+      // A late GUIDED confirmation must also be handed back to the FCU.
+      beginHandover("GUIDED_NOGPS confirmation timed out");
+      break;
+    }
+    if (now_ - last_mode_request_ >= 1.0) {
+      last_mode_request_ = now_;
+      requestFcMode("GUIDED_NOGPS");
+    }
+    break;
+  }
+  case FsmState::STATE_HANDOVER:
+    sampler_->getHoverReference(robot_state_, references_, now_,
+                                robot_command_.rotor_mode);
+    break;
   case FsmState::STATE_GUIDED: {
     //! [STATE] GUIDED => ...
     if (!rc_input_.isGuidedMode()) {
-      // Set fc manual mode via mavros
-      if (!setFcGuidedMode(false)) {
-        break;
-      }
-      //! [STATE] GUIDED => MANUAL by rc
-      setFsmState(FsmState::STATE_MANUAL);
+      beginHandover("CH5 released");
       break;
-    } else if (rc_input_.isTrajModeTriggered()) {
+    } else if (ref_type_ != ReferenceType::TYPE_TAKEOFF &&
+               rc_input_.isTrajModeTriggered()) {
       rc_input_.resetTrajModeTrigger();
       // Double check if fc state is set to guided
       if (!fc_state_.guided) {
@@ -519,28 +615,41 @@ void Fsm::updateFsmStateAndReference() {
       break;
     }
 
+    // Ground arming usually leaves the throttle stick low. Require centering
+    // after ascent before joystick velocity control can command a descent.
+    if (ref_type_ != ReferenceType::TYPE_TAKEOFF &&
+        velocity_control_.des_vel.norm() <= kVelocityDeadZone &&
+        std::abs(velocity_control_.des_yaw_rate) <= kVelocityDeadZone)
+      velocity_teleop_ready_ = true;
+
     //! [STATE] GUIDED
     //-------------------------------------- ReferenceType::TYPE_TAKEOFF
     //----------------------------------------
     if (ref_type_ == ReferenceType::TYPE_TAKEOFF) {
-      if (robot_state_.pos.z() > fsm_param_->takeoff_height - 0.02) {
-        //! [TYPE] TAKEOFF => HOVER
+      // A CH6 edge during ascent is consumed, so it cannot trigger a delayed
+      // trajectory transition immediately after takeoff.
+      rc_input_.resetTrajModeTrigger();
+      const auto status = takeoff_plan_.update(
+          now_, {robot_state_.pos.x(), robot_state_.pos.y(), robot_state_.pos.z()},
+          {robot_state_.vel.x(), robot_state_.vel.y(), robot_state_.vel.z()});
+      if (status == TakeoffPlan::Status::COMPLETE) {
+        sampler_->getTakeoffReference(takeoff_plan_, references_, now_,
+                                      robot_command_.rotor_mode);
         setReferenceType(ReferenceType::TYPE_HOVER);
-        //! NOTE: use the previous reference state instead of robot_state
-        //! to avoid reference jump from TYPE TAKEOFF to HOVER cause of
-        //! constant error of quadrotor.
         sampler_->getHoverReference(references_.front().state, references_,
                                     now_, robot_command_.rotor_mode, true);
+        takeoff_plan_.reset();
+        ROS_INFO("Takeoff complete; holding the takeoff target.");
+      } else if (status == TakeoffPlan::Status::RUNNING) {
+        sampler_->getTakeoffReference(takeoff_plan_, references_, now_,
+                                      robot_command_.rotor_mode);
       } else {
-        //! [TYPE] TAKEOFF;
-        sampler_->getTakeoffReference(robot_state_, references_, now_,
-                                      robot_command_.rotor_mode,
-                                      fsm_param_->takeoff_height);
+        beginHandover(std::string("Takeoff failed: ") + TakeoffPlan::statusName(status));
       }
     }
     //-------------------------------------- ReferenceType::TYPE_VEL
     //----------------------------------------
-    else if (fsm_param_->velocity_teleop &&
+    else if (fsm_param_->velocity_teleop && velocity_teleop_ready_ &&
              (velocity_control_.des_vel.norm() > kVelocityDeadZone ||
               std::abs(velocity_control_.des_yaw_rate) > kVelocityDeadZone)) {
       //! [TYPE] ANY => VEL
@@ -591,12 +700,7 @@ void Fsm::updateFsmStateAndReference() {
   case FsmState::STATE_TRAJ: {
     //! [STATE] TRAJ => ...
     if (!rc_input_.isGuidedMode()) {
-      // Set fc manual mode via mavros
-      if (!setFcGuidedMode(false)) {
-        break;
-      }
-      //! [STATE] TRAJ => MANUAL by rc
-      setFsmState(FsmState::STATE_MANUAL);
+      beginHandover("CH5 released during trajectory control");
       break;
     } else if (!rc_input_.isTrajMode()) {
       //! [STATE] TRAJ => GUIDED by rc
@@ -773,40 +877,130 @@ void Fsm::publishTrajTrigger() {
   traj_trigger_pub_.publish(trigger);
 }
 
-bool Fsm::setFcGuidedMode(bool on) {
-  mavros_msgs::SetMode setmode_srv;
-  if (on) {
-    if (fc_state_.mode == "GUIDED_NOGPS") {
-      ROS_WARN("Already in GUIDED mode!");
-      return true;
-    }
-    setmode_srv.request.custom_mode = "GUIDED_NOGPS";
-    if (!(mavros_setmode_srv_.call(setmode_srv) &&
-          setmode_srv.response.mode_sent)) {
-      ROS_ERROR(
-          "Failure in MANUAL => GUIDED: Setting GUIDED_NOGPS mode rejected by "
-          "FCU!");
+bool Fsm::fcStateFresh() const {
+  return std::isfinite(fc_state_.stamp) && fc_state_.connected &&
+         now_ >= fc_state_.stamp &&
+         now_ - fc_state_.stamp <= fsm_param_->fc_state_timeout;
+}
+
+bool Fsm::requestFcMode(const std::string& mode) {
+  mavros_msgs::SetMode service;
+  service.request.custom_mode = mode;
+  if (!mavros_setmode_srv_.exists() || !mavros_setmode_srv_.call(service) ||
+      !service.response.mode_sent) {
+    ROS_ERROR_STREAM("Could not send FCU mode request: " << mode);
+    return false;
+  }
+  ROS_INFO_STREAM("Requested FCU mode " << mode << "; waiting for /mavros/state.");
+  return true;
+}
+
+bool Fsm::prepareGuidedEntry() {
+  takeoff_requested_ = false;
+  velocity_teleop_ready_ = false;
+  if (!fcStateFresh() || !fc_state_.armed) {
+    ROS_ERROR("Guided entry rejected: connect and arm the FCU with the transmitter first.");
+    return false;
+  }
+  if (robot_state_.vel.norm() > kMaxVelocityToHoverMode) {
+    ROS_ERROR("Guided entry rejected: vehicle speed is too high.");
+    return false;
+  }
+  if (fc_state_.mode != "STABILIZE" && fc_state_.mode != "ALT_HOLD" &&
+      fc_state_.mode != "LOITER" && fc_state_.mode != "POSHOLD" &&
+      fc_state_.mode != "GUIDED_NOGPS") {
+    ROS_ERROR_STREAM("Guided entry rejected from FCU mode " << fc_state_.mode);
+    return false;
+  }
+  if (robot_command_.rotor_mode != RobotCommandMode::MODE_ATTITUDE &&
+      robot_command_.rotor_mode != RobotCommandMode::MODE_SINGLE_ROTOR) {
+    ROS_ERROR("Guided entry rejected: unsupported command_mode.");
+    return false;
+  }
+  if (fsm_param_->auto_takeoff) {
+    if (robot_command_.rotor_mode != RobotCommandMode::MODE_ATTITUDE ||
+        !std::isfinite(extended_state_stamp_) || now_ < extended_state_stamp_ ||
+        now_ - extended_state_stamp_ > fsm_param_->extended_state_timeout ||
+        (extended_state_.landed_state != mavros_msgs::ExtendedState::LANDED_STATE_ON_GROUND &&
+         extended_state_.landed_state != mavros_msgs::ExtendedState::LANDED_STATE_IN_AIR)) {
+      ROS_ERROR("Auto takeoff requires attitude output and fresh, known /mavros/extended_state.");
       return false;
-    } else {
-      ROS_INFO("Setting GUIDED_NOGPS mode by FCU.");
     }
-  } else {
-    if (fc_state_.mode == "STABILIZE") {
-      ROS_WARN("Already in STABILIZE mode!");
-      return true;
+    takeoff_requested_ = extended_state_.landed_state ==
+        mavros_msgs::ExtendedState::LANDED_STATE_ON_GROUND;
+    if (takeoff_requested_) {
+      auto settings = fsm_param_->takeoff;
+      settings.height = fsm_param_->takeoff_height;
+      TakeoffPlan validation;
+      if (robot_state_.vel.norm() > fsm_param_->takeoff_start_speed_max ||
+          !validation.start({robot_state_.pos.x(), robot_state_.pos.y(), robot_state_.pos.z()},
+                            robot_state_.getYaw(), now_, settings)) {
+        ROS_ERROR("Takeoff rejected: excessive start speed, invalid profile limits or timeout.");
+        return false;
+      }
     }
-    setmode_srv.request.custom_mode = "STABILIZE";
-    if (!(mavros_setmode_srv_.call(setmode_srv) &&
-          setmode_srv.response.mode_sent)) {
-      ROS_ERROR(
-          "Failure in GUIDED => MANUAL: Setting STABILIZE mode rejected by "
-          "FCU!");
+  }
+  if (robot_command_.rotor_mode == RobotCommandMode::MODE_ATTITUDE) {
+    mavros_msgs::ParamGet parameter;
+    parameter.request.param_id = "GUID_OPTIONS";
+    if (!mavros_getparam_srv_.exists() || !mavros_getparam_srv_.call(parameter) ||
+        !parameter.response.success || (parameter.response.value.integer & 8) == 0) {
+      ROS_ERROR("Guided entry rejected: cannot verify GUID_OPTIONS bit 3 (thrust as thrust).");
       return false;
-    } else {
-      ROS_INFO("Setting STABILIZE mode by FCU.");
     }
   }
   return true;
+}
+
+void Fsm::stopAutonomy() {
+  takeoff_plan_.reset();
+  takeoff_requested_ = false;
+  rc_input_.resetGuidedModeTrigger();
+  rc_input_.resetTrajModeTrigger();
+  setReferenceType(ReferenceType::TYPE_HOVER);
+  setFsmState(FsmState::STATE_MANUAL);
+}
+
+void Fsm::beginHandover(const std::string& reason) {
+  if (fsm_state_ == FsmState::STATE_HANDOVER) return;
+  const bool was_waiting = fsm_state_ == FsmState::STATE_WAIT_GUIDED;
+  ROS_ERROR_STREAM("Ending companion control: " << reason
+                   << ". Requesting " << fsm_param_->handover_mode);
+  takeoff_plan_.reset();
+  takeoff_requested_ = false;
+  rc_input_.resetGuidedModeTrigger();
+  rc_input_.resetTrajModeTrigger();
+  setReferenceType(ReferenceType::TYPE_HOVER);
+  if (robot_state_.pos.allFinite() && robot_state_.att.allFinite())
+    sampler_->getHoverReference(robot_state_, references_, now_,
+                                robot_command_.rotor_mode, true);
+  setFsmState(FsmState::STATE_HANDOVER);
+  mode_request_start_ = now_;
+  last_mode_request_ = now_;
+  if (fcStateFresh() && fc_state_.armed &&
+      (fc_state_.mode == "GUIDED_NOGPS" || was_waiting)) {
+    requestFcMode(fsm_param_->handover_mode);
+  } else if (fcStateFresh()) {
+    stopAutonomy();
+  }
+}
+
+void Fsm::updateHandover() {
+  if (!fcStateFresh()) {
+    ROS_ERROR_THROTTLE(1.0, "FCU state unavailable during takeover; waiting for FCU failsafe/pilot.");
+    return;
+  }
+  if (!fc_state_.armed || fc_state_.mode != "GUIDED_NOGPS") {
+    ROS_WARN_STREAM("Companion control stopped; FCU mode is " << fc_state_.mode);
+    stopAutonomy();
+    return;
+  }
+  if (now_ - last_mode_request_ >= 1.0 || now_ < last_mode_request_) {
+    last_mode_request_ = now_;
+    requestFcMode(fsm_param_->handover_mode);
+  }
+  if (now_ - mode_request_start_ > fsm_param_->mode_switch_timeout)
+    ROS_ERROR_THROTTLE(1.0, "FCU takeover not confirmed. Pilot intervention required.");
 }
 
 }; // namespace flygripper_flight

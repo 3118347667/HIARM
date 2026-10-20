@@ -5,6 +5,7 @@
 #include "flygripper_common/type/robot_command.hpp"
 
 #include "flygripper_flight/RosFsmParameterConfig.h"
+#include "flygripper_flight/takeoff.hpp"
 
 using namespace flygripper_common;
 
@@ -64,6 +65,11 @@ struct FsmParameter{
   RobotCommandMode command_mode;
   bool auto_takeoff;
   Scalar takeoff_height;
+  TakeoffPlan::Settings takeoff;
+  Scalar mode_switch_timeout;
+  Scalar extended_state_timeout;
+  Scalar takeoff_start_speed_max;
+  std::string handover_mode;
   bool traj_trigger;
 
   bool velocity_teleop;
@@ -147,6 +153,27 @@ class FsmParameterConfig:
 
     getParamDefault("auto_takeoff", params.auto_takeoff, false, pnh);
     getParamDefault("takeoff_height", params.takeoff_height, 1.0, pnh);
+    getParamDefault("takeoff_velocity", params.takeoff.velocity, 0.25, pnh);
+    getParamDefault("takeoff_acceleration", params.takeoff.acceleration, 0.3, pnh);
+    getParamDefault("takeoff_jerk", params.takeoff.jerk, 1.0, pnh);
+    getParamDefault("takeoff_position_tolerance", params.takeoff.position_tolerance, 0.08, pnh);
+    getParamDefault("takeoff_velocity_tolerance", params.takeoff.velocity_tolerance, 0.1, pnh);
+    getParamDefault("takeoff_settle_time", params.takeoff.settle_time, 1.0, pnh);
+    getParamDefault("takeoff_liftoff_timeout", params.takeoff.liftoff_timeout, 6.0, pnh);
+    getParamDefault("takeoff_timeout", params.takeoff.timeout, 20.0, pnh);
+    getParamDefault("takeoff_max_tracking_error", params.takeoff.max_tracking_error, 0.5, pnh);
+    getParamDefault("mode_switch_timeout", params.mode_switch_timeout, 3.0, pnh);
+    getParamDefault("extended_state_timeout", params.extended_state_timeout, 1.0, pnh);
+    getParamDefault("takeoff_start_speed_max", params.takeoff_start_speed_max, 0.2, pnh);
+    getParamDefault("handover_mode", params.handover_mode, std::string("ALT_HOLD"), pnh);
+    if (!std::isfinite(params.mode_switch_timeout) || params.mode_switch_timeout <= 0.0 ||
+        !std::isfinite(params.extended_state_timeout) || params.extended_state_timeout <= 0.0 ||
+        !std::isfinite(params.takeoff_start_speed_max) || params.takeoff_start_speed_max <= 0.0 ||
+        (params.handover_mode != "ALT_HOLD" && params.handover_mode != "LAND" &&
+         params.handover_mode != "STABILIZE")) {
+      ROS_ERROR("Invalid takeoff timeout/speed or handover_mode (ALT_HOLD, LAND, STABILIZE).");
+      return false;
+    }
 
     getParamDefault("traj_trigger", params.traj_trigger, false, pnh);
 
