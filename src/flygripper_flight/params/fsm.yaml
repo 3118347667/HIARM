@@ -4,6 +4,7 @@ loop_time_error_threshold: 0.1 # generally set to one cycle duration of loop_fre
 # Timeout
 imu_timeout: 0.1
 odom_timeout: 0.1
+sensor_future_tolerance: 0.02 # MAVROS timesync jitter; larger clock errors are rejected [s]
 rotor_speed_timeout: 0.1
 actuator_state_timeout: 0.1
 fc_state_timeout: 3.0
@@ -16,7 +17,7 @@ command_mode: 0 # 0: Attitude, 1: Body Rate, 2: Rotor Thrust, 3: Body Rate Custo
 
 # Guided Mode
 auto_takeoff: true # Ground + armed + CH5 rising edge => relative-height takeoff
-takeoff_height: 1.0 # Rise above the position recorded for this takeoff [m]
+takeoff_height: 0.5 # Rise above the position recorded for this takeoff [m]
 takeoff_velocity: 0.25 # Vertical reference limit [m/s]
 takeoff_acceleration: 0.3 # Vertical reference limit [m/s^2]
 takeoff_jerk: 1.0 # Vertical reference limit [m/s^3]

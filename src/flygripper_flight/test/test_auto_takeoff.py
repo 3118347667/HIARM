@@ -36,6 +36,7 @@ class AutoTakeoffTest(unittest.TestCase):
         self.follow = True
         self.publish_odom = True
         self.frozen_odom_stamp = None
+        self.imu_time_offset = 0.0
         self.publish_extended = True
         self.ch5 = self.ch6 = 1000
         self.origin = [2.0, -3.0, 0.6]
@@ -129,7 +130,7 @@ class AutoTakeoffTest(unittest.TestCase):
                 ext.header.stamp = stamp
                 self.pubs["extended"].publish(ext)
             imu = Imu()
-            imu.header.stamp = stamp
+            imu.header.stamp = stamp + rospy.Duration(self.imu_time_offset)
             imu.orientation.w = 1.0
             imu.linear_acceleration.z = 9.81
             self.pubs["imu"].publish(imu)
@@ -273,6 +274,22 @@ class AutoTakeoffTest(unittest.TestCase):
         self.wait_ascent()
         self.ch5 = 1000
         self.wait_for(lambda: self.mode == "ALT_HOLD", "cancel ascent with CH5")
+        self.assert_stopped()
+
+    def test_small_timesync_future_offset_is_allowed(self):
+        self.imu_time_offset = 0.005
+        self.start_node()
+        self.trigger()
+        self.wait_ascent()
+        time.sleep(0.2)
+        self.assertEqual(self.mode, "GUIDED_NOGPS")
+
+    def test_large_future_offset_requests_takeover(self):
+        self.start_node()
+        self.trigger()
+        self.wait_ascent()
+        self.imu_time_offset = 0.5
+        self.wait_for(lambda: self.mode == "ALT_HOLD", "large future IMU clock offset")
         self.assert_stopped()
 
     def test_external_mode_has_priority(self):

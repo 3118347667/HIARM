@@ -59,6 +59,7 @@ struct FsmParameter{
   Scalar fc_state_timeout;
   Scalar rc_input_timeout;
   Scalar battery_timeout;
+  Scalar sensor_future_tolerance;
 
   // dynamic parameters
   ControllerType controller;
@@ -144,6 +145,12 @@ class FsmParameterConfig:
     getParamDefault("fc_state_timeout", params.fc_state_timeout, 0.1, pnh); //static
     getParamDefault("rc_input_timeout", params.rc_input_timeout, 5.0, pnh); //static
     getParamDefault("battery_timeout", params.battery_timeout, 5.0, pnh); //static
+    getParamDefault("sensor_future_tolerance", params.sensor_future_tolerance, 0.02, pnh);
+    if (!std::isfinite(params.sensor_future_tolerance) || params.sensor_future_tolerance < 0.0 ||
+        params.sensor_future_tolerance > std::min(params.imu_timeout, params.odom_timeout)) {
+      ROS_ERROR("sensor_future_tolerance must be between zero and the sensor timeout.");
+      return false;
+    }
 
     int controller, command_mode;
     if (!getParam("controller", controller, pnh)) return false; //static
@@ -152,7 +159,7 @@ class FsmParameterConfig:
     params.command_mode = static_cast<RobotCommandMode>(command_mode);
 
     getParamDefault("auto_takeoff", params.auto_takeoff, false, pnh);
-    getParamDefault("takeoff_height", params.takeoff_height, 1.0, pnh);
+    getParamDefault("takeoff_height", params.takeoff_height, 0.5, pnh);
     getParamDefault("takeoff_velocity", params.takeoff.velocity, 0.25, pnh);
     getParamDefault("takeoff_acceleration", params.takeoff.acceleration, 0.3, pnh);
     getParamDefault("takeoff_jerk", params.takeoff.jerk, 1.0, pnh);

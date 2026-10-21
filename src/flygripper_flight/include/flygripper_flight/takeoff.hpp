@@ -11,7 +11,7 @@ namespace flygripper_flight {
 class TakeoffPlan {
  public:
   struct Settings {
-    double height = 1.0;
+    double height = 0.5;
     double velocity = 0.25;
     double acceleration = 0.3;
     double jerk = 1.0;

@@ -514,8 +514,15 @@ bool Fsm::updateRobotState() {
     ROS_WARN("Battery data invalid!");
   }
   ret &= fcStateFresh();
-  ret &= imu_.stamp > 0.0 && now_ >= imu_.stamp &&
-         odom_.stamp > 0.0 && now_ >= odom_.stamp;
+  // MAVROS maps FCU boot time to ROS time using a filtered timesync offset.
+  // Small sub-frame future timestamps are normal; large jumps still fail.
+  const bool sensor_clock_valid = imu_.stamp > 0.0 && odom_.stamp > 0.0 &&
+      imu_.stamp <= now_ + fsm_param_->sensor_future_tolerance &&
+      odom_.stamp <= now_ + fsm_param_->sensor_future_tolerance;
+  if (!sensor_clock_valid)
+    ROS_WARN_THROTTLE(1.0, "Sensor clock invalid: IMU age %.6f s, odometry age %.6f s",
+                      now_ - imu_.stamp, now_ - odom_.stamp);
+  ret &= sensor_clock_valid;
   if (robot_command_.rotor_mode == RobotCommandMode::MODE_SINGLE_ROTOR)
     ret &= rotor_speed_.isReceived(now_, fsm_param_->rotor_speed_timeout) &&
            rotor_speed_.valid();
