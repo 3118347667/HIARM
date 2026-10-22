@@ -24,3 +24,5 @@ Radxa Zero 3W 的 Docker 编译与板端工作区上传说明见 [docker/ros-one
 CAN 接口若尚未配置为 UP，仍需用 root 身份运行一次 `src/flygripper_actuator/scripts/can.sh`；运行时不会交互索取密码。
 
 Wi-Fi 切换脚本 `./scripts/switch_wifi.sh` 只激活 NetworkManager 中已有的 `DIiffRobot_2_5G` 或 `dongbudemo` 连接配置。新板首次使用前，先在板上配置好这两个连接及其密码，再以 root 身份运行一次 `bash /home/rock/dynamic_grasp/scripts/setup_wifi_switch_sudoers.sh`，安装并校验 `/etc/sudoers.d/hiarm-wifi-switch`。如果 ADB shell 是 root，也可以从 Mac 执行 `adb shell 'bash /home/rock/dynamic_grasp/scripts/setup_wifi_switch_sudoers.sh'`。普通代码上传只复制安装脚本和规则文件，不会修改板上的 sudoers。此后 `rock` 可在两个已保存的连接间切换，无需输入 sudo 密码；上传脚本不会传输本地 `scripts/.wifi_credentials`。已在板上的旧副本不会被上传脚本删除，确认无需保留后可在板上手动删除。
+
+无网络时，如需手动用 Mac 时间设置板端系统时钟，在 Mac 项目目录运行 `./scripts/sync_board_time_adb.sh`。脚本要求 ADB shell 为 root；连接多个设备时传入设备序列号，例如 `./scripts/sync_board_time_adb.sh 2f49935e4210e61b`。它不会修改 NTP 设置或硬件 RTC。

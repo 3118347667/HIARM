@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+export NMCLI_PAGER=cat
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 interface=wlan0
@@ -51,14 +52,23 @@ if [[ "$interactive" == true && -n ${SSH_CONNECTION:-} ]]; then
   exit 0
 fi
 
+activate() {
+  if [[ $EUID -eq 0 ]]; then
+    /usr/bin/nmcli --wait 90 connection up id "$ssid" ifname "$interface"
+  else
+    sudo -n /usr/bin/nmcli --wait 90 connection up id "$ssid" ifname "$interface"
+  fi
+}
+
 echo "Switching $interface to $ssid..."
-if [[ $EUID -eq 0 ]]; then
-  /usr/bin/nmcli --wait 90 connection up id "$ssid" ifname "$interface"
-else
-  sudo -n /usr/bin/nmcli --wait 90 connection up id "$ssid" ifname "$interface" || {
-    echo "Could not activate $ssid. Check hotspot availability and run scripts/setup_wifi_switch_sudoers.sh as root on the board." >&2
-    exit 1
-  }
+if ! activate; then
+  echo "Could not activate $ssid. Saved access-point restrictions:" >&2
+  nmcli -f 802-11-wireless.ssid,802-11-wireless.bssid,802-11-wireless.band,802-11-wireless.channel connection show "$ssid" >&2 || true
+  echo 'A non-empty BSSID locks this profile to one access point; other hotspots with the same SSID cannot be used.' >&2
+  echo 'Visible access points (cached scan):' >&2
+  nmcli --colors no -f IN-USE,SSID,BSSID,SIGNAL,FREQ device wifi list ifname "$interface" --rescan no >&2 || true
+  echo 'For a sudo permission error, run scripts/setup_wifi_switch_sudoers.sh as root on the board.' >&2
+  exit 1
 fi
 echo "Connected to $ssid."
 NMCLI_PAGER=cat nmcli -g IP4.ADDRESS device show "$interface" || true

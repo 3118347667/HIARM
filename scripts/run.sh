@@ -6,11 +6,14 @@ MAV_NAME="flygripper" #"robot"
 USE_SIM="false"       #"false"
 GUI="false"
 MOCAP_IP="10.1.1.198"
+QGC_IP="${QGC_IP:-10.1.1.91}"
+QGC_PORT="${QGC_PORT:-14550}"
 RUN_MODE="${1:-}"
 
 echo "Start Running MAVROS！"
+echo "Forward MAVLink to QGC at ${QGC_IP}:${QGC_PORT}/UDP"
 "${WORKSPACE_DIR}/scripts/require_serial_access.sh" /dev/ttyACM0 || exit 1
-roslaunch mavros apm.launch &
+roslaunch mavros apm.launch "gcs_url:=udp://@${QGC_IP}:${QGC_PORT}" &
 sleep 10 # wait roscore
 echo "Start Running Ctrl！"
 roslaunch flygripper_flight flight.launch mav_name:=${MAV_NAME} use_sim:=${USE_SIM} &
