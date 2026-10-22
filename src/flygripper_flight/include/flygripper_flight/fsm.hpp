@@ -169,6 +169,9 @@ class Fsm {
   RobotState robot_state_;
   Odometry odom_;
   Imu imu_;
+  // Callback processing times, kept separate from measurement timestamps.
+  double odom_receive_stamp_{-1.0};
+  double imu_receive_stamp_{-1.0};
   Battery battery_;
   ActuatorState actuator_state_;
   RotorSpeed rotor_speed_;

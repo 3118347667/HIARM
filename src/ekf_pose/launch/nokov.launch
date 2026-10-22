@@ -8,9 +8,11 @@
         <!-- parms -->
         <rosparam file="$(find ekf)/launch/PX4_vio_drone.yaml" command="load" />
 
-        <!--body in IMU frame-->>
+        <!--body in IMU frame-->
         <param name="imu_trans_x" type="double" value="0.06"/> 
         <param name="imu_trans_y" type="double" value="-0.08"/> 
+        <!-- <param name="imu_trans_x" type="double" value="0.0"/>
+        <param name="imu_trans_y" type="double" value="0.0"/>  -->
         <param name="imu_trans_z" type="double" value="0.0"/> 
 
         <!-- Qt -->

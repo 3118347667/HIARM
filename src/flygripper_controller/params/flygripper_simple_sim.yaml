@@ -34,5 +34,3 @@ geometric_controller:
   thrust_flt1_cutoff_freq: 30.0
   torque_flt1_cutoff_freq: 5.0
   torque_flt2_cutoff_freq: 15.0
-
-  magic_number: 0 # not used

@@ -10,8 +10,8 @@ Round:                      1
 DiagWidth:                  0.5
 SideWidth:                  0.5
 
-MaxAccRate:                  1.0
-MaxVelRate:                  2.0
+MaxAccRate:                  1.5
+MaxVelRate:                  2.5
 WeightT:                     5.0
 
 ChiVec:                      [1024.0, 1024.0, 1024.0]

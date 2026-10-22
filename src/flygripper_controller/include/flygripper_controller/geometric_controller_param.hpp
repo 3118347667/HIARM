@@ -72,8 +72,6 @@ class GeometricControllerParameter {
   Scalar thrust_flt1_cutoff_freq;
   Scalar torque_flt1_cutoff_freq, torque_flt2_cutoff_freq;
 
-  // TODO: debug
-  int magic_number;
   friend std::ostream& operator<<(std::ostream& os,
                                   const GeometricControllerParameter& p) {
     os.precision(3);
@@ -200,8 +198,6 @@ class GeometricControllerParameterConfig
     if (!getParam("torque_flt2_cutoff_freq", params.torque_flt2_cutoff_freq,
                   pnh))
       return false;
-    // TODO: debug
-    if (!getParam("magic_number", params.magic_number, pnh)) return false;
     if (!getParam("ff_omega", params.ff_omega, pnh)) return false;
 
     return true;
@@ -281,8 +277,6 @@ class GeometricControllerParameterConfig
     config.thrust_flt1_cutoff_freq = params.thrust_flt1_cutoff_freq;
     config.torque_flt1_cutoff_freq = params.torque_flt1_cutoff_freq;
     config.torque_flt2_cutoff_freq = params.torque_flt2_cutoff_freq;
-    // TODO: debug
-    config.magic_number = params.magic_number;
   }
 
   void config2DynamicParams(const RosGeometricControllerParameterConfig& config,
@@ -360,8 +354,6 @@ class GeometricControllerParameterConfig
     params.thrust_flt1_cutoff_freq = config.thrust_flt1_cutoff_freq;
     params.torque_flt1_cutoff_freq = config.torque_flt1_cutoff_freq;
     params.torque_flt2_cutoff_freq = config.torque_flt2_cutoff_freq;
-    // TODO: debug
-    params.magic_number = config.magic_number;
   }
 };
 }  // namespace flygripper_controller

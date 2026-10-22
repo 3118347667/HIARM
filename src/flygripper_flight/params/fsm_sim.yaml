@@ -10,8 +10,7 @@ fc_state_timeout: 3.0
 rc_input_timeout: 3.0
 battery_timeout: 3.0
 
-# Controller settings
-controller: 0 #0: Geometric, 1: NMPC
+# Flight command output
 command_mode: 2 # 0: Attitude, 1: Body Rate, 2: Rotor Thrust, 3: Body Rate Customized
 
 # Guided Mode

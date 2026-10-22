@@ -10,22 +10,6 @@
 using namespace flygripper_common;
 
 namespace flygripper_flight{
-enum class ControllerType: int{
-  GEOMETRIC_CONTROLLER=0,
-  NMPC_CONTROLLER=1
-};
-
-inline std::string ControllerTypeToString(ControllerType controller_type){
-  switch(controller_type){
-  case ControllerType::GEOMETRIC_CONTROLLER:
-    return "Geometric Controller";
-  case ControllerType::NMPC_CONTROLLER:
-    return "NMPC Controller";
-  default:
-    return "Unknown";
-  }
-}
-
 enum class AdmittanceMode: int{
   DISABLE=0,
   ADMITTANCE=1,
@@ -62,7 +46,6 @@ struct FsmParameter{
   Scalar sensor_future_tolerance;
 
   // dynamic parameters
-  ControllerType controller;
   RobotCommandMode command_mode;
   bool auto_takeoff;
   Scalar takeoff_height;
@@ -103,8 +86,7 @@ struct FsmParameter{
     os << "rc_input_timeout: " << p.rc_input_timeout << std::endl;
     os << "battery_timeout: " << p.battery_timeout << std::endl;
 
-    os << "controller: " << ControllerTypeToString(p.controller) << std::endl;
-    os << "controller_mode: " << CommandModeToString(p.command_mode) << std::endl;
+    os << "command_mode: " << CommandModeToString(p.command_mode) << std::endl;
 
     os << "auto_takeoff: " << (p.auto_takeoff ? "True" : "False") << std::endl;
     os << "takeoff_height: " << p.takeoff_height << std::endl;
@@ -152,9 +134,7 @@ class FsmParameterConfig:
       return false;
     }
 
-    int controller, command_mode;
-    if (!getParam("controller", controller, pnh)) return false; //static
-    params.controller = static_cast<ControllerType>(controller);
+    int command_mode;
     if (!getParam("command_mode", command_mode, pnh)) return false; //static
     params.command_mode = static_cast<RobotCommandMode>(command_mode);
 
@@ -234,7 +214,6 @@ class FsmParameterConfig:
 
   void dynamicParams2Config(const FsmParameter& params, RosFsmParameterConfig& config) override{
     // convert params to dynamic reconfig
-    config.controller = static_cast<int>(params.controller);
     config.command_mode = static_cast<int>(params.command_mode);
     config.auto_takeoff = params.auto_takeoff;
     config.takeoff_height = params.takeoff_height;
@@ -277,7 +256,6 @@ class FsmParameterConfig:
 
   void config2DynamicParams(const RosFsmParameterConfig& config, FsmParameter& params) override{
     // convert dynamic reconfig to params
-    params.controller = static_cast<ControllerType>(config.controller);
     params.command_mode = static_cast<RobotCommandMode>(config.command_mode);
     params.auto_takeoff = config.auto_takeoff;
     params.takeoff_height = config.takeoff_height;

@@ -35,7 +35,9 @@ class Odometry
       ROS_ERROR_THROTTLE(2.0, "Odometry has never been received!");
       return false;
     } else if (now - stamp > timeout){
-      ROS_ERROR_THROTTLE(1.0, "Odometry is not received for %f seconds!", timeout);
+      ROS_ERROR_THROTTLE(1.0,
+          "\033[1;31mOdometry timestamp is stale: age=%.6f s, timeout=%.6f s. "
+          "This does not prove raw mocap loss.\033[0m", now - stamp, timeout);
       return false;
     }
     return true;

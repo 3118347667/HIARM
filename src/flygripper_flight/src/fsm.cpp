@@ -209,11 +209,13 @@ void Fsm::rosSetup(ros::NodeHandle &nh) {
 }
 
 void Fsm::rosOdomCallback(nav_msgs::OdometryConstPtr msg) {
+  odom_receive_stamp_ = ros::Time::now().toSec();
   fromRosMsg(msg, odom_);
   odom_.stamp = msg->header.stamp.toSec();
 }
 
 void Fsm::rosImuCallback(sensor_msgs::ImuConstPtr msg) {
+  imu_receive_stamp_ = ros::Time::now().toSec();
   fromRosMsg(msg, imu_);
   imu_.stamp = msg->header.stamp.toSec();
 }
@@ -428,15 +430,34 @@ void Fsm::updateParameter() {
 bool Fsm::updateRobotState() {
   static double last_imu_stamp = -1.0;
   bool ret = true;
-  if (!imu_.isReceived(now_, fsm_param_->imu_timeout)) {
+  const auto freshness_reason = [this](double stamp, double received, double timeout) {
+    if (received < 0.0) return "NO MESSAGE PROCESSED YET";
+    if (!std::isfinite(stamp) || stamp <= 0.0) return "INVALID HEADER TIMESTAMP";
+    if (now_ - received > timeout) return "NO RECENT CALLBACK (stream/queue/scheduling)";
+    return "OLD HEADER TIMESTAMP (messages still arriving; delay/clock offset)";
+  };
+  // Preserve measurement-age gating; callback time is diagnostic only.
+  if (!std::isfinite(imu_.stamp) || now_ - imu_.stamp > fsm_param_->imu_timeout) {
     ret = false;
+    ROS_ERROR_THROTTLE(1.0,
+        "\033[1;31m[IMU freshness] %s; header_age=%.1f ms, callback_gap=%.1f ms, limit=%.1f ms. Companion control unavailable.\033[0m",
+        freshness_reason(imu_.stamp, imu_receive_stamp_, fsm_param_->imu_timeout),
+        (now_ - imu_.stamp) * 1000.0,
+        imu_receive_stamp_ < 0.0 ? -1.0 : (now_ - imu_receive_stamp_) * 1000.0,
+        fsm_param_->imu_timeout * 1000.0);
   } else if (!imu_.valid()) {
     ret = false;
     ROS_WARN("IMU data invalid!");
   }
 
-  if (!odom_.isReceived(now_, fsm_param_->odom_timeout)) {
+  if (!std::isfinite(odom_.stamp) || now_ - odom_.stamp > fsm_param_->odom_timeout) {
     ret = false;
+    ROS_ERROR_THROTTLE(1.0,
+        "\033[1;31m[EKF odometry freshness] %s; header_age=%.1f ms, callback_gap=%.1f ms, limit=%.1f ms. This does not prove raw mocap loss.\033[0m",
+        freshness_reason(odom_.stamp, odom_receive_stamp_, fsm_param_->odom_timeout),
+        (now_ - odom_.stamp) * 1000.0,
+        odom_receive_stamp_ < 0.0 ? -1.0 : (now_ - odom_receive_stamp_) * 1000.0,
+        fsm_param_->odom_timeout * 1000.0);
   } else if (!odom_.valid()) {
     ret = false;
     ROS_WARN("Odometry data invalid!");
@@ -520,7 +541,7 @@ bool Fsm::updateRobotState() {
       imu_.stamp <= now_ + fsm_param_->sensor_future_tolerance &&
       odom_.stamp <= now_ + fsm_param_->sensor_future_tolerance;
   if (!sensor_clock_valid)
-    ROS_WARN_THROTTLE(1.0, "Sensor clock invalid: IMU age %.6f s, odometry age %.6f s",
+    ROS_WARN_THROTTLE(1.0, "\033[1;31mSensor clock invalid: IMU age %.6f s, odometry age %.6f s\033[0m",
                       now_ - imu_.stamp, now_ - odom_.stamp);
   ret &= sensor_clock_valid;
   if (robot_command_.rotor_mode == RobotCommandMode::MODE_SINGLE_ROTOR)

@@ -1,4 +1,5 @@
 geometric_controller: # hover version
+  # Common feedback filters
   acc_cutoff_freq: 5.0
   omega_cutoff_freq: 5.0
   rotor_cutoff_freq: 5.0
@@ -7,6 +8,7 @@ geometric_controller: # hover version
   indi_acc_cutoff_freq: 8.0
   indi_alpha_cutoff_freq: 8.0
 
+  # Position and velocity tracking (used with NONE or L1)
   # k_pos: {x: 3.0, y: 3.0, z: 3.0}
   # k_pos: {x: 2.5, y: 3.0, z: 3.0}
   # k_pos: {x: 5.0, y: 5.0, z: 3.0}
@@ -40,6 +42,7 @@ geometric_controller: # hover version
   L1_force_bound: {x: 4.0, y: 4.0, z: 4.0}
   L1_torque_bound: {x: 0.1, y: 0.1, z: 0.1}
   INDI_force_bound: {x: 4.0, y: 4.0, z: 4.0}
+  # Used by FSM admittance wrench detection when admittance is enabled
   INDI_torque_bound: {x: 0.1, y: 0.1, z: 0.1}
   tact_force_bound: {x: 0.0, y: 0.0, z: 4.0}
   tact_torque_bound: {x: 0.0, y: 0.0, z: 0.0}
@@ -56,5 +59,3 @@ geometric_controller: # hover version
   thrust_flt1_cutoff_freq: 10.0
   torque_flt1_cutoff_freq: 5.0
   torque_flt2_cutoff_freq: 15.0
-
-  magic_number: 0
