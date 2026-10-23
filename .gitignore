@@ -16,6 +16,8 @@ compile_commands.json
 # python
 __pycache__/
 *.pyc
+.venv/
+.ipynb_checkpoints/
 
 .runtime_captures/
 

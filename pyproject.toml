@@ -1,0 +1,15 @@
+[project]
+name = "hiarm-analysis"
+version = "0.1.0"
+description = "Offline HIARM bag analysis and Jupyter notebooks"
+requires-python = ">=3.12,<3.13"
+dependencies = [
+    "ipykernel",
+    "jupyterlab",
+    "matplotlib",
+    "numpy",
+    "rosbags",
+]
+
+[tool.uv]
+package = false
