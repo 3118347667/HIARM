@@ -1,13 +1,23 @@
 #!/bin/bash
 set -e
 CURRENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd)"
-MAV_NAME="flygripper" #"robot"
+MAV_NAME="${MAV_NAME:-flygripper}"
+SNAPSHOT_TIMEOUT_SECONDS="${SNAPSHOT_TIMEOUT_SECONDS:-30}"
+[[ "$SNAPSHOT_TIMEOUT_SECONDS" =~ ^[1-9][0-9]*$ ]] || {
+  echo "SNAPSHOT_TIMEOUT_SECONDS must be a positive integer." >&2
+  exit 2
+}
 if [ -z "$1" ]; then
   echo "No argument supplied, defaulting to timestamp"
 fi
 
 source "${CURRENT_DIR}/../devel/setup.bash"
 TOPICS=(
+  "/${MAV_NAME}/rosparam_snapshot"
+  /rosout
+  /rosout_agg
+  /diagnostics
+  "/${MAV_NAME}/runtime_diagnostics"
   # Motion capture and state estimation
   /vrpn_client_node/HIARM3/pose
   /vrpn_client_node/HIARM3/twist
@@ -22,6 +32,9 @@ TOPICS=(
   /mavros/esc_telemetry
   /mavros/battery
   /mavros/imu/data
+  /mavros/imu/data_raw
+  /mavros/timesync_status
+  /mavros/time_reference
   /mavros/state
   /mavros/extended_state
   /mavros/rc/in
@@ -72,15 +85,15 @@ cleanup_snapshot() {
     kill "$SNAPSHOT_PID" 2>/dev/null || true
     wait "$SNAPSHOT_PID" 2>/dev/null || true
   fi
-  rm -f "$SNAPSHOT_DIR/ready" "$SNAPSHOT_DIR/skipped"
+  rm -f "$SNAPSHOT_DIR/ready" "$SNAPSHOT_DIR/failed"
   rmdir "$SNAPSHOT_DIR"
 }
 trap cleanup_snapshot EXIT
 
-python3 "${CURRENT_DIR}/publish_param_snapshot.py" "$MAV_NAME" "$SNAPSHOT_DIR/ready" "$SNAPSHOT_DIR/skipped" &
+python3 "${CURRENT_DIR}/publish_param_snapshot.py" "$MAV_NAME" "$SNAPSHOT_DIR/ready" "$SNAPSHOT_DIR/failed" "$SNAPSHOT_TIMEOUT_SECONDS" &
 SNAPSHOT_PID=$!
-for ((i = 0; i < 100; i++)); do
-  if [ -f "$SNAPSHOT_DIR/ready" ] || [ -f "$SNAPSHOT_DIR/skipped" ]; then
+for ((i = 0; i < (SNAPSHOT_TIMEOUT_SECONDS + 5) * 10; i++)); do
+  if [ -f "$SNAPSHOT_DIR/ready" ] || [ -f "$SNAPSHOT_DIR/failed" ]; then
     break
   fi
   if ! kill -0 "$SNAPSHOT_PID" 2>/dev/null; then
@@ -88,30 +101,34 @@ for ((i = 0; i < 100; i++)); do
   fi
   sleep 0.1
 done
-if [ -f "$SNAPSHOT_DIR/ready" ]; then
-  TOPICS+=("/${MAV_NAME}/rosparam_snapshot")
-else
-  if [ ! -f "$SNAPSHOT_DIR/skipped" ]; then
-    echo "ROS parameter snapshot unavailable; recording other topics without it." >&2
-  fi
-  kill "$SNAPSHOT_PID" 2>/dev/null || true
-  wait "$SNAPSHOT_PID" 2>/dev/null || true
-  SNAPSHOT_PID=""
+if [ ! -f "$SNAPSHOT_DIR/ready" ] || ! kill -0 "$SNAPSHOT_PID" 2>/dev/null; then
+  printf '\033[1;31mParameter snapshot failed. Recording was NOT started.\033[0m\n' >&2
+  if [ -f "$SNAPSHOT_DIR/failed" ]; then cat "$SNAPSHOT_DIR/failed" >&2; fi
+  exit 1
 fi
+echo "Parameter snapshot ready; starting recording with parameters and ROS logs."
 
-CMD=(rosbag record --tcpnodelay "${TOPICS[@]}")
-BAG_FILE=""
-if [ -n "$2" ]; then
-  BAG_FILE="${1:-rosbag}_$(date +%Y-%m-%d-%H-%M-%S)_$$.bag"
-  CMD+=(-O "$BAG_FILE")
-elif [ -n "$1" ]; then
-  CMD+=(-o "$1")
+BAG_FILE="${1:+${1}_}$(date +%Y-%m-%d-%H-%M-%S).bag"
+if [ -e "$BAG_FILE" ] || [ -e "$BAG_FILE.active" ]; then
+  BAG_FILE="${BAG_FILE%.bag}_$$.bag"
 fi
+CMD=(rosbag record --tcpnodelay -O "$BAG_FILE" "${TOPICS[@]}")
 
 printf 'Start Record Bag with Command:'
 printf ' %q' "${CMD[@]}"
 printf '\n'
-"${CMD[@]}"
+# Allow Ctrl-C to close rosbag cleanly, then inspect the actual recorded file.
+trap ':' INT
+if "${CMD[@]}"; then
+  RECORD_STATUS=0
+else
+  RECORD_STATUS=$?
+fi
+if [ "$RECORD_STATUS" -ne 0 ] && [ "$RECORD_STATUS" -ne 130 ]; then
+  echo "rosbag failed with status $RECORD_STATUS" >&2
+  exit "$RECORD_STATUS"
+fi
+python3 "${CURRENT_DIR}/verify_param_recording.py" "$BAG_FILE" "$MAV_NAME"
 
 if [ -n "$2" ]; then
   if [ ! -f "$BAG_FILE" ]; then

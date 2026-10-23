@@ -1,5 +1,10 @@
 #pragma once
+#include <algorithm>
+#include <deque>
+#include <mutex>
+#include <diagnostic_msgs/DiagnosticArray.h>
 #include <ros/callback_queue.h>
+#include "flygripper_flight/runtime_io.hpp"
 #include <ros/ros.h>
 #include <mavros_msgs/ExtendedState.h>
 
@@ -60,6 +65,51 @@ class Fsm {
 
  private:
   void updateParameter();
+  void consumeInputs();
+  void publishRuntimeDiagnostics();
+  template<class Message> struct InputSlot {
+    typename Message::ConstPtr message;
+    double received_ros{-1.0}, received_steady{-1.0}, max_gap{0.0};
+    uint64_t count{0}, sequence_gaps{0};
+    uint32_t last_sequence{0};
+    void store(typename Message::ConstPtr msg) {
+      const double now = steadySeconds();
+      if (count) {
+        max_gap = std::max(max_gap, now - received_steady);
+        const uint32_t delta = msg->header.seq - last_sequence;
+        if (delta > 1 && delta < 0x80000000u) sequence_gaps += delta - 1;
+      }
+      last_sequence = msg->header.seq;
+      message = msg;
+      received_ros = ros::Time::now().toSec();
+      received_steady = now;
+      ++count;
+    }
+  };
+  struct Inputs {
+    InputSlot<sensor_msgs::Imu> imu;
+    InputSlot<nav_msgs::Odometry> odom;
+    InputSlot<mavros_msgs::RCIn> rc;
+    InputSlot<mavros_msgs::State> fc;
+    InputSlot<mavros_msgs::ExtendedState> extended;
+    InputSlot<sensor_msgs::BatteryState> battery;
+    InputSlot<mavros_msgs::ESCTelemetry> rotor;
+    InputSlot<flygripper_msgs::ActuatorState> actuator;
+    InputSlot<flygripper_msgs::PolynomialTrajectory> trajectory;
+  };
+  std::mutex input_mutex_;
+  Inputs received_, applied_;
+  std::deque<InputSlot<mavros_msgs::RCIn>> rc_events_;
+  bool rc_overflow_{false}, rc_release_seen_{false}, rc_snapshot_overflow_{false};
+  double loop_started_{0.0}, last_loop_started_{0.0};
+  double loop_period_{0.0}, input_copy_duration_{0.0}, control_duration_{0.0};
+  double last_diagnostic_{0.0}, max_loop_period_{0.0}, max_control_duration_{0.0};
+  std::string fault_reason_, last_handover_reason_;
+  double parameter_duration_{0.0}, compute_duration_{0.0};
+  bool handover_from_wait_{false};
+  std::string guided_entry_mode_;
+  bool guided_entry_verified_{false};
+  uint64_t guided_entry_completed_baseline_{0};
 
   bool updateRobotState();
 
@@ -140,6 +190,9 @@ class Fsm {
   RobotParameter::Ptr robot_param_;
 
   ros::CallbackQueue update_queue_;
+  ros::CallbackQueue control_queue_;
+  std::unique_ptr<ros::AsyncSpinner> input_spinner_, control_spinner_;
+  std::unique_ptr<ModeWorker> mode_worker_;
   ros::Timer loop_timer_;
   ros::Duration dt_;
   ros::SubscribeOptions rc_options_, fc_state_options_, battery_options_,
@@ -150,7 +203,7 @@ class Fsm {
   ros::Publisher rotor_command_pub_, thrust_att_command_pub_,
       actuator_command_pub_, traj_trigger_pub_, ctrl_state_pub_, reference_pub_,
       robot_state_pub_, ext_indi_pub_, ext_l1_pub_, ext_tact_pub_,
-      interactive_wrench_pub_;
+      interactive_wrench_pub_, runtime_diagnostic_pub_;
   ros::ServiceClient mavros_setmode_srv_, mavros_getparam_srv_;
 
   //  flygripper_msgs::RotorCommand rotor_command_msg_;
@@ -172,6 +225,7 @@ class Fsm {
   // Callback processing times, kept separate from measurement timestamps.
   double odom_receive_stamp_{-1.0};
   double imu_receive_stamp_{-1.0};
+  double imu_callback_gap_{-1.0}, odom_callback_gap_{-1.0};
   Battery battery_;
   ActuatorState actuator_state_;
   RotorSpeed rotor_speed_;

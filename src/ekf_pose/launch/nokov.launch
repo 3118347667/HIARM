@@ -6,6 +6,7 @@
         <remap from="~ekf_odom" to="/ekf/ekf_odom"/>
 
         <!-- parms -->
+        <param name="odom_publish_queue_size" type="int" value="10"/>
         <rosparam file="$(find ekf)/launch/PX4_vio_drone.yaml" command="load" />
 
         <!--body in IMU frame-->

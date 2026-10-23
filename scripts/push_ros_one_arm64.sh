@@ -51,11 +51,11 @@ for cmd in ssh rsync; do
   command -v "$cmd" >/dev/null || { echo "Missing command: $cmd" >&2; exit 1; }
 done
 
-retry ssh "${ssh_options[@]}" "$target" "test \"\$(uname -m)\" = aarch64 && test -f /opt/ros/one/setup.bash && test -d '$remote_workspace' && mkdir -p '$remote_workspace/src' '$remote_workspace/scripts' '$remote_workspace/devel' '$remote_workspace/params'"
-for directory in src scripts devel params; do
+retry ssh "${ssh_options[@]}" "$target" "test \"\$(uname -m)\" = aarch64 && test -f /opt/ros/one/setup.bash && test -d '$remote_workspace' && mkdir -p '$remote_workspace/src' '$remote_workspace/scripts' '$remote_workspace/devel' '$remote_workspace/params' '$remote_workspace/bags'"
+for directory in src scripts devel params bags; do
   echo "Uploading $directory to $target..."
   retry rsync -az --timeout=90 --partial-dir=.rsync-partial --delay-updates \
-    --exclude='/.wifi_credentials' \
+    --exclude='/.wifi_credentials' --exclude='*.bag' --exclude='*.bag.active' --exclude='__pycache__/' \
     -e "$rsync_ssh" "$workspace/$directory/" "$target:$remote_workspace/$directory/"
 done
 
@@ -76,6 +76,10 @@ for binary in \
     exit 1
   fi
 done
+for script in bags/bag.sh bags/publish_param_snapshot.py bags/verify_param_recording.py; do
+  test -f "/home/rock/dynamic_grasp/$script"
+done
+bash -n /home/rock/dynamic_grasp/bags/bag.sh
 BOARD_CHECK
 }
 retry board_check

@@ -73,11 +73,48 @@ Fsm::Fsm(ros::NodeHandle &nh, ros::NodeHandle &pnh) {
   sampler_ = std::make_shared<Sampler>(robot_param_, fsm_param_);
   controller_ = std::make_shared<GeometricController>(
       robot_param_, fsm_param_->loop_frequency);
-  loop_timer_ = nh.createTimer(ros::Duration(1.0 / fsm_param_->loop_frequency),
+  mode_worker_ = std::make_unique<ModeWorker>(
+      [this](const std::string& mode, bool verify_thrust, const ModeWorker::Current& current) {
+        if (verify_thrust) {
+          mavros_msgs::ParamGet parameter;
+          parameter.request.param_id = "GUID_OPTIONS";
+          if (!mavros_getparam_srv_.exists() || !mavros_getparam_srv_.call(parameter) ||
+              !parameter.response.success || (parameter.response.value.integer & 8) == 0) {
+            ROS_ERROR("Guided entry rejected: cannot verify GUID_OPTIONS bit 3.");
+            return false;
+          }
+        }
+        if (!current()) return false;
+        mavros_msgs::SetMode service;
+        service.request.custom_mode = mode;
+        const bool success = mavros_setmode_srv_.exists() && current() &&
+            mavros_setmode_srv_.call(service) && service.response.mode_sent;
+        if (current()) {
+          if (success) ROS_INFO_STREAM("Requested FCU mode " << mode << "; waiting for /mavros/state.");
+          else ROS_ERROR_STREAM("Could not send FCU mode request: " << mode);
+        }
+        return success;
+      });
+  input_spinner_ = std::make_unique<ros::AsyncSpinner>(1, &update_queue_);
+  control_spinner_ = std::make_unique<ros::AsyncSpinner>(1, &control_queue_);
+  input_spinner_->start();
+  ros::NodeHandle control_nh(nh);
+  control_nh.setCallbackQueue(&control_queue_);
+  loop_timer_ = control_nh.createTimer(ros::Duration(1.0 / fsm_param_->loop_frequency),
                                &Fsm::controlLoop, this);
+  control_spinner_->start();
 }
 
-Fsm::~Fsm() { publishZeroCommand(); };
+Fsm::~Fsm() {
+  loop_timer_.stop();
+  if (control_spinner_) control_spinner_->stop();
+  if (input_spinner_) input_spinner_->stop();
+  // Shutdown clients before joining; ROS shutdown also tears down service links.
+  mavros_setmode_srv_.shutdown();
+  mavros_getparam_srv_.shutdown();
+  if (mode_worker_) mode_worker_->stop();
+  publishZeroCommand();
+};
 
 void Fsm::publishZeroCommand() {
   // Zero thrust is a motor-stop command with GUID_OPTIONS bit 3 set.
@@ -141,13 +178,13 @@ void Fsm::rosSetup(ros::NodeHandle &nh) {
   extended_state_sub_ = nh.subscribe(extended_state_options_);
   //! odom
   odom_options_ = ros::SubscribeOptions::create<nav_msgs::Odometry>(
-      "odom", 10, boost::bind(&Fsm::rosOdomCallback, this, _1),
+      "odom", 2, boost::bind(&Fsm::rosOdomCallback, this, _1),
       ros::VoidConstPtr(), &update_queue_);
   odom_options_.transport_hints = ros::TransportHints().tcpNoDelay();
   odom_sub_ = nh.subscribe(odom_options_);
   //! imu
   imu_options_ = ros::SubscribeOptions::create<sensor_msgs::Imu>(
-      "imu", 10, boost::bind(&Fsm::rosImuCallback, this, _1),
+      "imu", 2, boost::bind(&Fsm::rosImuCallback, this, _1),
       ros::VoidConstPtr(), &update_queue_);
   imu_options_.transport_hints = ros::TransportHints().tcpNoDelay();
   imu_sub_ = nh.subscribe(imu_options_);
@@ -180,6 +217,8 @@ void Fsm::rosSetup(ros::NodeHandle &nh) {
   traj_options_.transport_hints = ros::TransportHints().tcpNoDelay();
   traj_sub_ = nh.subscribe(traj_options_);
 
+  runtime_diagnostic_pub_ = nh.advertise<diagnostic_msgs::DiagnosticArray>("runtime_diagnostics", 10);
+
   // robot command
   rotor_command_pub_ =
       nh.advertise<mavros_msgs::ActuatorControl>("rotor_command", 10);
@@ -209,66 +248,152 @@ void Fsm::rosSetup(ros::NodeHandle &nh) {
 }
 
 void Fsm::rosOdomCallback(nav_msgs::OdometryConstPtr msg) {
-  odom_receive_stamp_ = ros::Time::now().toSec();
-  fromRosMsg(msg, odom_);
-  odom_.stamp = msg->header.stamp.toSec();
+  std::lock_guard<std::mutex> lock(input_mutex_);
+  received_.odom.store(msg);
 }
 
 void Fsm::rosImuCallback(sensor_msgs::ImuConstPtr msg) {
-  imu_receive_stamp_ = ros::Time::now().toSec();
-  fromRosMsg(msg, imu_);
-  imu_.stamp = msg->header.stamp.toSec();
+  std::lock_guard<std::mutex> lock(input_mutex_);
+  received_.imu.store(msg);
 }
 
 void Fsm::rosActuatorStateCallback(flygripper_msgs::ActuatorStateConstPtr msg) {
-  fromRosMsg(msg, actuator_state_);
+  std::lock_guard<std::mutex> lock(input_mutex_);
+  received_.actuator.store(msg);
 }
 
 void Fsm::rosBatteryCallback(sensor_msgs::BatteryStateConstPtr msg) {
-  fromRosMsg(msg, battery_);
+  std::lock_guard<std::mutex> lock(input_mutex_);
+  received_.battery.store(msg);
 }
 
 void Fsm::rosRotorSpeedCallback(mavros_msgs::ESCTelemetryConstPtr msg) {
-  fromRosMsg(msg, rotor_speed_);
+  std::lock_guard<std::mutex> lock(input_mutex_);
+  received_.rotor.store(msg);
 }
 
 void Fsm::rosRcCallback(mavros_msgs::RCInConstPtr msg) {
-  fromRosMsg(msg, rc_input_, true);
-  rc_input_.update(); // update mode trigger
+  std::lock_guard<std::mutex> lock(input_mutex_);
+  received_.rc.store(msg);
+  if (rc_events_.size() >= 64) { rc_events_.pop_front(); rc_overflow_ = true; }
+  rc_events_.push_back(received_.rc);
 }
 
 void Fsm::rosFcStateCallback(mavros_msgs::StateConstPtr msg) {
-  fromRosMsg(msg, fc_state_);
+  std::lock_guard<std::mutex> lock(input_mutex_);
+  received_.fc.store(msg);
 }
 
 void Fsm::rosExtendedStateCallback(mavros_msgs::ExtendedStateConstPtr msg) {
-  extended_state_ = *msg;
-  extended_state_stamp_ = ros::Time::now().toSec();
+  std::lock_guard<std::mutex> lock(input_mutex_);
+  received_.extended.store(msg);
 }
 
 void Fsm::rosTrajCallback(flygripper_msgs::PolynomialTrajectoryConstPtr msg) {
-  fromRosMsg(msg, trajectory_);
+  std::lock_guard<std::mutex> lock(input_mutex_);
+  received_.trajectory.store(msg);
+}
+
+void Fsm::consumeInputs() {
+  const double started = steadySeconds();
+  Inputs input;
+  std::deque<InputSlot<mavros_msgs::RCIn>> rc_events;
+  bool overflow;
+  {
+    std::lock_guard<std::mutex> lock(input_mutex_);
+    input = received_;
+    rc_events.swap(rc_events_);
+    overflow = rc_overflow_;
+    rc_overflow_ = false;
+  }
+  rc_snapshot_overflow_ = overflow;
+  rc_release_seen_ = overflow;
+  for (const auto& event : rc_events) {
+    fromRosMsg(event.message, rc_input_, true);
+    rc_input_.stamp = event.received_ros;
+    rc_input_.update();
+    if (!rc_input_.isGuidedMode()) rc_release_seen_ = true;
+  }
+  if (input.imu.message && input.imu.count != applied_.imu.count) {
+    fromRosMsg(input.imu.message, imu_);
+    imu_.stamp = input.imu.message->header.stamp.toSec();
+  }
+  if (input.odom.message && input.odom.count != applied_.odom.count) {
+    fromRosMsg(input.odom.message, odom_);
+    odom_.stamp = input.odom.message->header.stamp.toSec();
+  }
+  if (input.fc.message && input.fc.count != applied_.fc.count) {
+    fromRosMsg(input.fc.message, fc_state_);
+    fc_state_.stamp = input.fc.received_ros;
+  }
+  if (input.battery.message && input.battery.count != applied_.battery.count) {
+    fromRosMsg(input.battery.message, battery_);
+    battery_.stamp = input.battery.received_ros;
+  }
+  if (input.actuator.message && input.actuator.count != applied_.actuator.count) {
+    fromRosMsg(input.actuator.message, actuator_state_);
+  }
+  if (input.rotor.message && input.rotor.count != applied_.rotor.count) {
+    fromRosMsg(input.rotor.message, rotor_speed_);
+    rotor_speed_.stamp = input.rotor.received_ros;
+  }
+  if (input.trajectory.message && input.trajectory.count != applied_.trajectory.count) {
+    fromRosMsg(input.trajectory.message, trajectory_);
+  }
+  if (input.extended.message) {
+    extended_state_ = *input.extended.message;
+    extended_state_stamp_ = input.extended.received_ros;
+  }
+  applied_ = input;
+  imu_receive_stamp_ = input.imu.received_ros;
+  odom_receive_stamp_ = input.odom.received_ros;
+  const double now = steadySeconds();
+  imu_callback_gap_ = input.imu.count ? now - input.imu.received_steady : -1.0;
+  odom_callback_gap_ = input.odom.count ? now - input.odom.received_steady : -1.0;
+  input_copy_duration_ = now - started;
 }
 
 void Fsm::controlLoop(const ros::TimerEvent &event) {
+  compute_duration_ = 0.0;
+  loop_started_ = steadySeconds();
+  loop_period_ = last_loop_started_ > 0.0 ? loop_started_ - last_loop_started_ : 0.0;
+  last_loop_started_ = loop_started_;
+  max_loop_period_ = std::max(max_loop_period_, loop_period_);
+  ScopeExit finish([this] {
+    control_duration_ = steadySeconds() - loop_started_;
+    max_control_duration_ = std::max(max_control_duration_, control_duration_);
+    publishRuntimeDiagnostics();
+  });
   checkCycleTime(1.0 / fsm_param_->loop_frequency,
                  fsm_param_->loop_time_error_threshold, dt_);
   tic_toc_.tic();
   now_ = event.current_real.toSec();
   //! [ROS] Update all ros callback functions to update data and parameters.
-  update_queue_.callAvailable();
+  consumeInputs();
   now_ = ros::Time::now().toSec();
+  const double parameter_started = steadySeconds();
   updateParameter();
+  parameter_duration_ = steadySeconds() - parameter_started;
+  now_ = ros::Time::now().toSec();
+  const double health_time = steadySeconds();
+  imu_callback_gap_ = applied_.imu.count ? health_time - applied_.imu.received_steady : -1.0;
+  odom_callback_gap_ = applied_.odom.count ? health_time - applied_.odom.received_steady : -1.0;
   //    ROS_INFO_STREAM("Param: "<< *robot_param_);
   robot_command_.rotor_mode = fsm_state_ == FsmState::STATE_MANUAL
       ? fsm_param_->command_mode : session_command_mode_;
+  const bool awaiting_late_guided = fsm_state_ == FsmState::STATE_HANDOVER &&
+      handover_from_wait_ && fc_state_.mode == guided_entry_mode_ &&
+      (mode_worker_->status().busy || now_ - mode_request_start_ < fsm_param_->mode_switch_timeout);
   // A pilot/FCU mode change always wins. Never switch back over a failsafe.
   if (fsm_state_ != FsmState::STATE_MANUAL &&
-      fsm_state_ != FsmState::STATE_WAIT_GUIDED && fcStateFresh() &&
+      fsm_state_ != FsmState::STATE_WAIT_GUIDED && !awaiting_late_guided && fcStateFresh() &&
       (!fc_state_.armed || fc_state_.mode != "GUIDED_NOGPS")) {
     stopAutonomy();
     return;
   }
+  if (rc_release_seen_ && fsm_state_ != FsmState::STATE_MANUAL &&
+      fsm_state_ != FsmState::STATE_HANDOVER)
+    beginHandover("CH5 released or RC event queue overflow");
   //! Update robot_state, fc_state and rc_input
   if (!updateRobotState()) {
     if (fsm_state_ == FsmState::STATE_MANUAL) {
@@ -277,7 +402,7 @@ void Fsm::controlLoop(const ros::TimerEvent &event) {
       rc_input_.resetTrajModeTrigger();
     } else {
       if (fsm_state_ != FsmState::STATE_HANDOVER)
-        beginHandover("Required IMU/odometry/RC/FCU data missing or invalid");
+        beginHandover(fault_reason_.empty() ? "Required input invalid" : fault_reason_);
       updateHandover();
     }
     return;
@@ -301,13 +426,15 @@ void Fsm::controlLoop(const ros::TimerEvent &event) {
   if ((fsm_state_ == FsmState::STATE_GUIDED ||
       fsm_state_ == FsmState::STATE_TRAJ ||
       fsm_state_ == FsmState::STATE_HANDOVER) &&
-      fc_state_.armed && fc_state_.mode == "GUIDED_NOGPS") {
+      guided_entry_verified_ && fc_state_.armed && fc_state_.mode == "GUIDED_NOGPS") {
     //! Controller execution
     static flygripper_common::RuntimeProfiler control_profiler(
         "trajectory_tracking_control", 1000);
     {
       flygripper_common::ScopedRuntimeSample profile_sample(control_profiler);
+      const double started = steadySeconds();
       controller_->getCommand(robot_state_, references_, robot_command_, now_);
+      compute_duration_ = steadySeconds() - started;
     }
     tic_toc_.toc("control");
 
@@ -429,48 +556,53 @@ void Fsm::updateParameter() {
 
 bool Fsm::updateRobotState() {
   static double last_imu_stamp = -1.0;
-  bool ret = true;
-  const auto freshness_reason = [this](double stamp, double received, double timeout) {
+  bool ret = !rc_snapshot_overflow_;
+  fault_reason_ = rc_snapshot_overflow_ ? "RC event queue overflow; " : "";
+  const auto freshness_reason = [](double stamp, double received, double gap, double timeout) {
     if (received < 0.0) return "NO MESSAGE PROCESSED YET";
     if (!std::isfinite(stamp) || stamp <= 0.0) return "INVALID HEADER TIMESTAMP";
-    if (now_ - received > timeout) return "NO RECENT CALLBACK (stream/queue/scheduling)";
-    return "OLD HEADER TIMESTAMP (messages still arriving; delay/clock offset)";
+    if (gap > timeout) return "NO RECENT CALLBACK (stream/queue/scheduling)";
+    return "OLD HEADER TIMESTAMP (check callback_gap for input stall versus delayed samples)";
   };
   // Preserve measurement-age gating; callback time is diagnostic only.
-  if (!std::isfinite(imu_.stamp) || now_ - imu_.stamp > fsm_param_->imu_timeout) {
+  if (!std::isfinite(imu_.stamp) || now_ - imu_.stamp > fsm_param_->imu_timeout ||
+      imu_callback_gap_ < 0.0 || imu_callback_gap_ > fsm_param_->imu_timeout) {
+    fault_reason_ += "IMU stale; ";
     ret = false;
     ROS_ERROR_THROTTLE(1.0,
         "\033[1;31m[IMU freshness] %s; header_age=%.1f ms, callback_gap=%.1f ms, limit=%.1f ms. Companion control unavailable.\033[0m",
-        freshness_reason(imu_.stamp, imu_receive_stamp_, fsm_param_->imu_timeout),
+        freshness_reason(imu_.stamp, imu_receive_stamp_, imu_callback_gap_, fsm_param_->imu_timeout),
         (now_ - imu_.stamp) * 1000.0,
-        imu_receive_stamp_ < 0.0 ? -1.0 : (now_ - imu_receive_stamp_) * 1000.0,
+        imu_callback_gap_ * 1000.0,
         fsm_param_->imu_timeout * 1000.0);
   } else if (!imu_.valid()) {
     ret = false;
+    fault_reason_ += "IMU invalid; ";
     ROS_WARN("IMU data invalid!");
   }
 
-  if (!std::isfinite(odom_.stamp) || now_ - odom_.stamp > fsm_param_->odom_timeout) {
+  if (!std::isfinite(odom_.stamp) || now_ - odom_.stamp > fsm_param_->odom_timeout ||
+      odom_callback_gap_ < 0.0 || odom_callback_gap_ > fsm_param_->odom_timeout) {
+    fault_reason_ += "EKF odometry stale; ";
     ret = false;
     ROS_ERROR_THROTTLE(1.0,
         "\033[1;31m[EKF odometry freshness] %s; header_age=%.1f ms, callback_gap=%.1f ms, limit=%.1f ms. This does not prove raw mocap loss.\033[0m",
-        freshness_reason(odom_.stamp, odom_receive_stamp_, fsm_param_->odom_timeout),
+        freshness_reason(odom_.stamp, odom_receive_stamp_, odom_callback_gap_, fsm_param_->odom_timeout),
         (now_ - odom_.stamp) * 1000.0,
-        odom_receive_stamp_ < 0.0 ? -1.0 : (now_ - odom_receive_stamp_) * 1000.0,
+        odom_callback_gap_ * 1000.0,
         fsm_param_->odom_timeout * 1000.0);
   } else if (!odom_.valid()) {
     ret = false;
+    fault_reason_ += "EKF odometry invalid; ";
     ROS_WARN("Odometry data invalid!");
   }
-  ret &= std::abs(imu_.att.norm() - 1.0) < 0.05 &&
-         std::abs(odom_.att.norm() - 1.0) < 0.05;
+  const bool quaternion_valid = std::abs(imu_.att.norm() - 1.0) < 0.05 &&
+                                std::abs(odom_.att.norm() - 1.0) < 0.05;
+  if (!quaternion_valid) fault_reason_ += "quaternion norm invalid; ";
+  ret &= quaternion_valid;
 
-  if (!rotor_speed_.isReceived(now_, fsm_param_->rotor_speed_timeout)) {
-    //ret = false;
-  } else if (!rotor_speed_.valid()) {
-    //ret = false;
-    ROS_WARN("ESC telemetry data invalid!");
-  }
+  // ESC freshness is required below only for single-rotor output. Attitude
+  // output intentionally works without ESC telemetry; do not log false alarms.
 
   if (ret) { // update robot_state from imu, odom, rotor_speed and
              // actuator_state(x)
@@ -513,9 +645,11 @@ bool Fsm::updateRobotState() {
   }
 
   if (!rc_input_.isReceived(now_, fsm_param_->rc_input_timeout)) {
+    fault_reason_ += "RC stale; ";
     ret = false;
   } else if (!rc_input_.valid()) {
     ret = false;
+    fault_reason_ += "RC invalid; ";
     ROS_WARN("RC In data invalid!");
   } else {
     velocity_control_.des_vel.x() =
@@ -534,6 +668,7 @@ bool Fsm::updateRobotState() {
     //ret = false;
     ROS_WARN("Battery data invalid!");
   }
+  if (!fcStateFresh()) fault_reason_ += "FCU state stale/disconnected; ";
   ret &= fcStateFresh();
   // MAVROS maps FCU boot time to ROS time using a filtered timesync offset.
   // Small sub-frame future timestamps are normal; large jumps still fail.
@@ -543,6 +678,7 @@ bool Fsm::updateRobotState() {
   if (!sensor_clock_valid)
     ROS_WARN_THROTTLE(1.0, "\033[1;31mSensor clock invalid: IMU age %.6f s, odometry age %.6f s\033[0m",
                       now_ - imu_.stamp, now_ - odom_.stamp);
+  if (!sensor_clock_valid) fault_reason_ += "sensor clock invalid; ";
   ret &= sensor_clock_valid;
   if (robot_command_.rotor_mode == RobotCommandMode::MODE_SINGLE_ROTOR)
     ret &= rotor_speed_.isReceived(now_, fsm_param_->rotor_speed_timeout) &&
@@ -570,7 +706,19 @@ void Fsm::updateFsmStateAndReference() {
       beginHandover("Guided entry cancelled or FCU disarmed");
       break;
     }
-    if (fc_state_.mode == "GUIDED_NOGPS") {
+    if (now_ < mode_request_start_ ||
+        now_ - mode_request_start_ > fsm_param_->mode_switch_timeout) {
+      // A late GUIDED confirmation must also be handed back to the FCU.
+      beginHandover("GUIDED_NOGPS entry verification/confirmation timed out");
+      break;
+    }
+    const auto worker = mode_worker_->status();
+    // Mode feedback alone cannot verify thrust semantics. Require a successful
+    // request from this session, including when the FCU was already in GUIDED.
+    if (worker.completed > guided_entry_completed_baseline_ &&
+        worker.result_mode == "GUIDED_NOGPS" && worker.success)
+      guided_entry_verified_ = true;
+    if (guided_entry_verified_ && fc_state_.mode == "GUIDED_NOGPS") {
       if (takeoff_requested_) {
         if (!std::isfinite(extended_state_stamp_) ||
             now_ - extended_state_stamp_ > fsm_param_->extended_state_timeout ||
@@ -597,12 +745,6 @@ void Fsm::updateFsmStateAndReference() {
                                     robot_command_.rotor_mode, true);
       }
       setFsmState(FsmState::STATE_GUIDED);
-      break;
-    }
-    if (now_ < mode_request_start_ ||
-        now_ - mode_request_start_ > fsm_param_->mode_switch_timeout) {
-      // A late GUIDED confirmation must also be handed back to the FCU.
-      beginHandover("GUIDED_NOGPS confirmation timed out");
       break;
     }
     if (now_ - last_mode_request_ >= 1.0) {
@@ -912,18 +1054,13 @@ bool Fsm::fcStateFresh() const {
 }
 
 bool Fsm::requestFcMode(const std::string& mode) {
-  mavros_msgs::SetMode service;
-  service.request.custom_mode = mode;
-  if (!mavros_setmode_srv_.exists() || !mavros_setmode_srv_.call(service) ||
-      !service.response.mode_sent) {
-    ROS_ERROR_STREAM("Could not send FCU mode request: " << mode);
-    return false;
-  }
-  ROS_INFO_STREAM("Requested FCU mode " << mode << "; waiting for /mavros/state.");
-  return true;
+  return mode_worker_->request(mode, mode == "GUIDED_NOGPS" &&
+      robot_command_.rotor_mode == RobotCommandMode::MODE_ATTITUDE);
 }
 
 bool Fsm::prepareGuidedEntry() {
+  guided_entry_verified_ = false;
+  guided_entry_mode_ = fc_state_.mode;
   takeoff_requested_ = false;
   velocity_teleop_ready_ = false;
   if (!fcStateFresh() || !fc_state_.armed) {
@@ -968,19 +1105,17 @@ bool Fsm::prepareGuidedEntry() {
       }
     }
   }
-  if (robot_command_.rotor_mode == RobotCommandMode::MODE_ATTITUDE) {
-    mavros_msgs::ParamGet parameter;
-    parameter.request.param_id = "GUID_OPTIONS";
-    if (!mavros_getparam_srv_.exists() || !mavros_getparam_srv_.call(parameter) ||
-        !parameter.response.success || (parameter.response.value.integer & 8) == 0) {
-      ROS_ERROR("Guided entry rejected: cannot verify GUID_OPTIONS bit 3 (thrust as thrust).");
-      return false;
-    }
-  }
+  // The worker verifies GUID_OPTIONS before sending GUIDED_NOGPS. Only a new
+  // result may authorize this session; an earlier success must not be reused.
+  const auto worker = mode_worker_->status();
+  if (worker.busy || worker.pending) return false;
+  guided_entry_completed_baseline_ = worker.completed;
   return true;
 }
 
 void Fsm::stopAutonomy() {
+  mode_worker_->cancel();
+  guided_entry_verified_ = false;
   takeoff_plan_.reset();
   takeoff_requested_ = false;
   rc_input_.resetGuidedModeTrigger();
@@ -990,8 +1125,11 @@ void Fsm::stopAutonomy() {
 }
 
 void Fsm::beginHandover(const std::string& reason) {
+  last_handover_reason_ = reason;
   if (fsm_state_ == FsmState::STATE_HANDOVER) return;
   const bool was_waiting = fsm_state_ == FsmState::STATE_WAIT_GUIDED;
+  handover_from_wait_ = was_waiting;
+  mode_worker_->cancel();
   ROS_ERROR_STREAM("Ending companion control: " << reason
                    << ". Requesting " << fsm_param_->handover_mode);
   takeoff_plan_.reset();
@@ -1018,6 +1156,10 @@ void Fsm::updateHandover() {
     ROS_ERROR_THROTTLE(1.0, "FCU state unavailable during takeover; waiting for FCU failsafe/pilot.");
     return;
   }
+  // An in-flight GUIDED RPC cannot be recalled. Keep cancellation handover
+  // alive briefly so a late GUIDED confirmation is handed back to the FCU.
+  if (fc_state_.armed && fc_state_.mode == guided_entry_mode_ && handover_from_wait_ &&
+      (mode_worker_->status().busy || now_ - mode_request_start_ < fsm_param_->mode_switch_timeout)) return;
   if (!fc_state_.armed || fc_state_.mode != "GUIDED_NOGPS") {
     ROS_WARN_STREAM("Companion control stopped; FCU mode is " << fc_state_.mode);
     stopAutonomy();
@@ -1029,6 +1171,80 @@ void Fsm::updateHandover() {
   }
   if (now_ - mode_request_start_ > fsm_param_->mode_switch_timeout)
     ROS_ERROR_THROTTLE(1.0, "FCU takeover not confirmed. Pilot intervention required.");
+}
+
+void Fsm::publishRuntimeDiagnostics() {
+  const double now = steadySeconds();
+  if (now - last_diagnostic_ < 0.1) return;
+  last_diagnostic_ = now;
+  diagnostic_msgs::DiagnosticArray array;
+  array.header.stamp = ros::Time::now();
+  diagnostic_msgs::DiagnosticStatus status;
+  status.name = ros::this_node::getName() + "/control_runtime";
+  status.hardware_id = "companion";
+  status.level = fault_reason_.empty() ? diagnostic_msgs::DiagnosticStatus::OK
+                                      : diagnostic_msgs::DiagnosticStatus::ERROR;
+  status.message = fault_reason_.empty() ? "Inputs valid" : fault_reason_;
+  const auto add = [&status](const std::string& key, double value) {
+    diagnostic_msgs::KeyValue pair;
+    pair.key = key;
+    pair.value = std::to_string(value);
+    status.values.push_back(pair);
+  };
+  add("imu_header_age_ms", (now_ - imu_.stamp) * 1000.0);
+  add("odom_header_age_ms", (now_ - odom_.stamp) * 1000.0);
+  // Age already present at callback entry, including timestamp mapping errors.
+  add("imu_age_at_callback_ms", applied_.imu.message
+      ? (applied_.imu.received_ros - applied_.imu.message->header.stamp.toSec()) * 1000.0 : -1.0);
+  add("odom_age_at_callback_ms", applied_.odom.message
+      ? (applied_.odom.received_ros - applied_.odom.message->header.stamp.toSec()) * 1000.0 : -1.0);
+  add("imu_callback_gap_ms", imu_callback_gap_ * 1000.0);
+  add("odom_callback_gap_ms", odom_callback_gap_ * 1000.0);
+  add("imu_callback_max_gap_ms", applied_.imu.max_gap * 1000.0);
+  add("odom_callback_max_gap_ms", applied_.odom.max_gap * 1000.0);
+  // Also expose the live receive thread, independently of the control snapshot.
+  double live_imu, live_odom;
+  {
+    std::lock_guard<std::mutex> lock(input_mutex_);
+    const double sampled = steadySeconds();
+    live_imu = received_.imu.count ? (sampled - received_.imu.received_steady) * 1000.0 : -1.0;
+    live_odom = received_.odom.count ? (sampled - received_.odom.received_steady) * 1000.0 : -1.0;
+  }
+  add("imu_live_callback_gap_ms", live_imu);
+  add("odom_live_callback_gap_ms", live_odom);
+  add("imu_callbacks", applied_.imu.count);
+  add("odom_callbacks", applied_.odom.count);
+  add("imu_sequence_gaps", applied_.imu.sequence_gaps);
+  add("odom_sequence_gaps", applied_.odom.sequence_gaps);
+  add("imu_timeout_ms", fsm_param_->imu_timeout * 1000.0);
+  add("odom_timeout_ms", fsm_param_->odom_timeout * 1000.0);
+  add("control_period_ms", loop_period_ * 1000.0);
+  add("control_period_max_ms", max_loop_period_ * 1000.0);
+  add("input_snapshot_ms", input_copy_duration_ * 1000.0);
+  add("parameter_refresh_ms", parameter_duration_ * 1000.0);
+  add("control_compute_ms", compute_duration_ * 1000.0);
+  add("control_work_ms", control_duration_ * 1000.0);
+  add("control_work_max_ms", max_control_duration_ * 1000.0);
+  const auto worker = mode_worker_->status();
+  add("mode_request_busy", worker.busy);
+  add("mode_request_pending", worker.pending);
+  add("mode_request_elapsed_ms", worker.elapsed * 1000.0);
+  add("mode_request_last_duration_ms", worker.last_duration * 1000.0);
+  add("mode_request_completed", worker.completed);
+  add("mode_request_ignored", worker.ignored);
+  add("mode_request_success", worker.success);
+  diagnostic_msgs::KeyValue mode;
+  mode.key = "mode_request_active"; mode.value = worker.active_mode;
+  status.values.push_back(mode);
+  mode.key = "last_handover_reason"; mode.value = last_handover_reason_;
+  status.values.push_back(mode);
+  mode.key = "fsm_state"; mode.value = FsmStateToString(fsm_state_);
+  status.values.push_back(mode);
+  mode.key = "fc_mode"; mode.value = fc_state_.mode;
+  status.values.push_back(mode);
+  array.status.push_back(status);
+  runtime_diagnostic_pub_.publish(array);
+  max_loop_period_ = max_control_duration_ = 0.0;
 }
 
 }; // namespace flygripper_flight

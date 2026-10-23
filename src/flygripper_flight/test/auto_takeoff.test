@@ -1,4 +1,4 @@
 <launch>
   <test test-name="auto_takeoff_contract" pkg="flygripper_flight"
-        type="test_auto_takeoff.py" time-limit="100"/>
+        type="test_auto_takeoff.py" time-limit="180"/>
 </launch>

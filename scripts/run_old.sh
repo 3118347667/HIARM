@@ -32,7 +32,8 @@ if [ "$USE_SIM" == "false" ]; then
   rosrun mavros mavsys message_interval --id=30 --rate=333    # common::ATTITUDE
   rosrun mavros mavsys message_interval --id=27 --rate=333    # common::RAW_IMU
   rosrun mavros mavsys message_interval --id=65 --rate=100    # common::RC_CHANNELS
-  rosrun mavros mavsys message_interval --id=11030 --rate=333 # ardupilotmega::ESC_TELEMETRY_1_TO_4
+  # rosrun mavros mavsys message_interval --id=11030 --rate=333 # unused ESC telemetry
+  rosrun mavros mavsys message_interval --id=11030 --rate=-1 # stop earlier ESC stream requests
 else
   echo "Start Running fake MAVROS！"
   roslaunch fake_mavros apm.launch mav_name:=${MAV_NAME} &

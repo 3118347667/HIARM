@@ -17,6 +17,7 @@ import rosparam
 import rospkg
 import rospy
 import rostest
+from diagnostic_msgs.msg import DiagnosticArray
 from flygripper_msgs.msg import GeometricControllerData
 from geometry_msgs.msg import PoseStamped
 from mavros_msgs.msg import AttitudeTarget, ExtendedState, ParamValue, RCIn, State
@@ -32,7 +33,13 @@ class AutoTakeoffTest(unittest.TestCase):
         self.mode = "STABILIZE"
         self.landed = ExtendedState.LANDED_STATE_ON_GROUND
         self.guid_options = 9
+        self.param_success = True
+        self.param_delay = 0.0
+        self.param_requests = []
         self.confirm_modes = True
+        self.mode_delay = 0.0
+        self.runtime = []
+        self.publish_imu = True
         self.follow = True
         self.publish_odom = True
         self.frozen_odom_stamp = None
@@ -58,6 +65,8 @@ class AutoTakeoffTest(unittest.TestCase):
             "rc": rospy.Publisher("/mavros/rc/in", RCIn, queue_size=10),
         }
         self.subs = [
+            rospy.Subscriber("/flygripper/runtime_diagnostics", DiagnosticArray,
+                             lambda msg: self.runtime.append(msg)),
             rospy.Subscriber("/mavros/setpoint_raw/attitude", AttitudeTarget,
                              lambda msg: self.commands.append(msg)),
             rospy.Subscriber("/flygripper/geometric_controller/data", GeometricControllerData,
@@ -98,12 +107,15 @@ class AutoTakeoffTest(unittest.TestCase):
 
     def set_mode(self, request):
         self.mode_requests.append(request.custom_mode)
+        time.sleep(self.mode_delay)
         if self.confirm_modes:
             self.mode = request.custom_mode
         return SetModeResponse(mode_sent=True)
 
     def get_param(self, request):
-        return ParamGetResponse(success=request.param_id == "GUID_OPTIONS",
+        self.param_requests.append(request.param_id)
+        time.sleep(self.param_delay)
+        return ParamGetResponse(success=self.param_success and request.param_id == "GUID_OPTIONS",
                                 value=ParamValue(integer=self.guid_options))
 
     def reference_callback(self, msg):
@@ -133,7 +145,8 @@ class AutoTakeoffTest(unittest.TestCase):
             imu.header.stamp = stamp + rospy.Duration(self.imu_time_offset)
             imu.orientation.w = 1.0
             imu.linear_acceleration.z = 9.81
-            self.pubs["imu"].publish(imu)
+            if self.publish_imu:
+                self.pubs["imu"].publish(imu)
             if self.publish_odom:
                 odom = Odometry()
                 odom.header.stamp = self.frozen_odom_stamp or stamp
@@ -216,6 +229,55 @@ class AutoTakeoffTest(unittest.TestCase):
         time.sleep(0.5)
         self.assertFalse(self.mode_requests)
         self.assertFalse(self.commands)
+
+    def assert_guided_entry_rejected(self):
+        self.trigger()
+        self.wait_for(lambda: self.mode == "ALT_HOLD", "unverified GUIDED entry handed back")
+        self.assertGreater(len(self.param_requests), 0, "entry must check GUID_OPTIONS")
+        self.assertEqual(len(self.commands), 0, "unverified entry must never output thrust")
+        self.assertEqual(len(self.references), 0, "unverified entry must not start takeoff")
+        self.assert_stopped()
+
+    def test_existing_guided_wrong_thrust_semantics_rejected(self):
+        self.mode = "GUIDED_NOGPS"
+        self.guid_options = 0
+        # Keep the takeover RPC in flight to also cover unverified HANDOVER output.
+        self.mode_delay = 0.3
+        self.start_node()
+        self.assert_guided_entry_rejected()
+
+    def test_existing_guided_param_failure_rejected(self):
+        self.mode = "GUIDED_NOGPS"
+        self.param_success = False
+        self.start_node()
+        self.assert_guided_entry_rejected()
+
+    def test_existing_guided_waits_for_slow_parameter_verification(self):
+        self.mode = "GUIDED_NOGPS"
+        self.param_delay = 0.8
+        self.start_node({"mode_switch_timeout": 2.0})
+        self.trigger()
+        self.wait_for(lambda: bool(self.param_requests), "parameter verification started")
+        time.sleep(0.3)
+        self.assertEqual(len(self.commands), 0, "no thrust before verification completes")
+        self.assertEqual(len(self.references), 0, "no takeoff before verification completes")
+        self.wait_ascent()
+
+    def test_existing_guided_rechecks_parameters_for_each_session(self):
+        self.mode = "GUIDED_NOGPS"
+        self.start_node()
+        self.trigger()
+        self.wait_ascent()
+        self.ch5 = 1000
+        self.wait_for(lambda: self.mode == "ALT_HOLD", "first session handed back")
+        self.assert_stopped()
+        self.commands.clear()
+        self.references.clear()
+        self.param_requests.clear()
+        self.guid_options = 0
+        self.mode = "GUIDED_NOGPS"
+        time.sleep(0.15)
+        self.assert_guided_entry_rejected()
 
     def test_missing_landed_state_rejected(self):
         self.publish_extended = False
@@ -310,6 +372,70 @@ class AutoTakeoffTest(unittest.TestCase):
         time.sleep(0.1)
         self.assertTrue(self.commands)
         self.assertTrue(all(c.thrust > 0 for c in self.commands))
+
+    def runtime_values(self):
+        return dict((v.key, v.value) for v in self.runtime[-1].status[0].values)
+
+    def test_slow_mode_service_does_not_block_inputs_or_control(self):
+        self.start_node()
+        self.trigger()
+        self.wait_ascent()
+        self.mode_delay = 2.0
+        self.ch5 = 1000
+        self.wait_for(lambda: "ALT_HOLD" in self.mode_requests, "handover request started")
+        self.wait_for(lambda: self.runtime and
+                      float(self.runtime_values()["mode_request_busy"]) == 1,
+                      "worker busy diagnostic")
+        before = float(self.runtime_values()["imu_callbacks"])
+        diag_count = len(self.runtime)
+        time.sleep(0.7)
+        values = self.runtime_values()
+        self.assertGreater(len(self.runtime) - diag_count, 3,
+                           "control diagnostics must continue during slow RPC")
+        self.assertGreater(float(values["imu_callbacks"]) - before, 25)
+        self.assertLess(float(values["imu_callback_gap_ms"]), 150)
+        self.assertLess(float(values["control_work_max_ms"]), 500)
+        self.assertGreater(float(values["mode_request_elapsed_ms"]), 500)
+        self.wait_for(lambda: self.mode == "ALT_HOLD", "delayed mode confirmation")
+        self.assert_stopped()
+
+    def test_late_guided_after_cancel_does_not_start_takeoff(self):
+        self.mode_delay = 1.2
+        self.start_node({"mode_switch_timeout": 0.4})
+        self.trigger()
+        self.wait_for(lambda: "GUIDED_NOGPS" in self.mode_requests, "guided RPC started")
+        self.ch5 = 1000
+        self.wait_for(lambda: self.mode == "ALT_HOLD", "late guided handed back", timeout=5)
+        self.assertTrue(all(r.position_reference.z <= self.origin[2] + 0.001
+                            for r in self.references),
+                        "late GUIDED must not start a cancelled takeoff")
+        self.wait_for(lambda: self.runtime and
+                      float(self.runtime_values()["mode_request_ignored"]) >= 1,
+                      "cancelled result ignored")
+
+    def test_imu_callback_stall_is_distinct_from_old_source_stamp(self):
+        self.start_node()
+        self.trigger()
+        self.wait_ascent()
+        self.publish_imu = False
+        self.wait_for(lambda: self.mode == "ALT_HOLD", "missing IMU takeover")
+        self.wait_for(lambda: self.runtime and
+                      float(self.runtime_values()["imu_callback_gap_ms"]) > 150,
+                      "monotonic IMU callback age")
+        self.assert_stopped()
+
+    def test_recent_callbacks_with_old_imu_stamp_still_fail(self):
+        self.start_node()
+        self.trigger()
+        self.wait_ascent()
+        self.imu_time_offset = -1.0
+        self.wait_for(lambda: self.mode == "ALT_HOLD", "old IMU timestamp takeover")
+        self.wait_for(lambda: self.runtime and
+                      float(self.runtime_values()["imu_header_age_ms"]) > 900,
+                      "old header age diagnostic")
+        self.assertLess(float(self.runtime_values()["imu_callback_gap_ms"]), 150)
+        self.assertGreater(float(self.runtime_values()["imu_age_at_callback_ms"]), 900)
+        self.assert_stopped()
 
     def tearDown(self):
         if self.process is not None and self.process.poll() is None:

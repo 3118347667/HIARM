@@ -5,6 +5,7 @@ add_compile_options(-std=c++17)
 
 find_package(catkin REQUIRED COMPONENTS
         roscpp
+        diagnostic_msgs
         flygripper_common
         flygripper_msgs
         flygripper_controller
@@ -15,6 +16,10 @@ find_package(Threads REQUIRED)
 find_package(Eigen3 REQUIRED)
 
 if(CATKIN_ENABLE_TESTING)
+  add_executable(test_runtime_io test/test_runtime_io.cpp)
+  target_include_directories(test_runtime_io PRIVATE include)
+  target_link_libraries(test_runtime_io ${CMAKE_THREAD_LIBS_INIT})
+  add_test(NAME runtime_io_contract COMMAND test_runtime_io)
   add_executable(test_takeoff test/test_takeoff.cpp)
   target_include_directories(test_takeoff PRIVATE include)
   add_test(NAME takeoff_profile COMMAND test_takeoff)

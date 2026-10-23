@@ -15,17 +15,47 @@ fi
 
 command -v ssh >/dev/null || { echo "ssh is required on the Mac." >&2; exit 1; }
 
+# Board SSH and sudo password, provided by the user for unattended use.
+board_password='rock'
+
 # Reuse one authenticated connection so the clock sample is taken after login.
 socket_dir=$(mktemp -d /tmp/hiarm-time-ssh.XXXXXX)
 socket="$socket_dir/control"
-ssh_options=(-o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=4)
+ssh_options=(-o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=4 -o StrictHostKeyChecking=accept-new)
 cleanup() {
   ssh -S "$socket" -O exit -o BatchMode=yes "$target" >/dev/null 2>&1 || true
   rm -rf -- "$socket_dir"
 }
 trap cleanup EXIT
 
-ssh -M -S "$socket" -fN "${ssh_options[@]}" "$target"
+if ! ssh -M -S "$socket" -fN -o BatchMode=yes "${ssh_options[@]}" "$target" </dev/null 2>/dev/null; then
+  command -v expect >/dev/null || { echo "SSH password login needs expect on the Mac." >&2; exit 1; }
+  rm -f -- "$socket"
+  BOARD_SSH_TARGET="$target" BOARD_SSH_SOCKET="$socket" BOARD_SSH_PASSWORD="$board_password" expect <<'EXPECT'
+set timeout 25
+log_user 1
+spawn ssh -M -S $env(BOARD_SSH_SOCKET) -fN \
+  -o ConnectTimeout=15 \
+  -o ServerAliveInterval=15 \
+  -o ServerAliveCountMax=4 \
+  -o StrictHostKeyChecking=accept-new \
+  -o PubkeyAuthentication=no \
+  -o PreferredAuthentications=password,keyboard-interactive \
+  -o NumberOfPasswordPrompts=1 \
+  $env(BOARD_SSH_TARGET)
+expect {
+  -re {(?i)(password|passphrase):[ \t]*$} {
+    send -- "$env(BOARD_SSH_PASSWORD)\r"
+    exp_continue
+  }
+  eof {}
+  timeout { puts stderr "SSH password authentication timed out."; exit 1 }
+}
+set result [wait]
+exit [lindex $result 3]
+EXPECT
+fi
+
 remote() {
   ssh -S "$socket" -o BatchMode=yes "${ssh_options[@]}" "$target" "$1"
 }
@@ -35,14 +65,7 @@ echo "SSH target:   $target"
 echo "Board before: $board_before"
 
 sudo_mode=$(remote 'if [ "$(id -u)" -eq 0 ]; then echo root; elif sudo -n /usr/bin/date -u +%s >/dev/null 2>&1; then echo nopass; else echo password; fi')
-if [[ "$sudo_mode" == password ]]; then
-  if [[ ! -r /dev/tty ]]; then
-    echo "Board sudo requires a password; run this script from an interactive terminal." >&2
-    exit 1
-  fi
-  read -r -s -p "Sudo password for $target: " sudo_password < /dev/tty
-  printf '\n' > /dev/tty
-elif [[ "$sudo_mode" != root && "$sudo_mode" != nopass ]]; then
+if [[ "$sudo_mode" != root && "$sudo_mode" != nopass && "$sudo_mode" != password ]]; then
   echo "Could not determine board sudo access." >&2
   exit 1
 fi
@@ -57,10 +80,10 @@ case "$sudo_mode" in
     board_after_epoch=$(remote "sudo -n /usr/bin/date -u -s '@$mac_epoch' >/dev/null && date -u +%s")
     ;;
   password)
-    board_after_epoch=$(printf '%s\n' "$sudo_password" | remote "sudo -S -p '' /usr/bin/date -u -s '@$mac_epoch' >/dev/null && date -u +%s")
-    unset sudo_password
+    board_after_epoch=$(printf '%s\n' "$board_password" | remote "sudo -S -p '' /usr/bin/date -u -s '@$mac_epoch' >/dev/null && date -u +%s")
     ;;
 esac
+unset board_password
 
 if [[ ! "$board_after_epoch" =~ ^[0-9]+$ ]]; then
   echo "Could not set or read the board system clock." >&2

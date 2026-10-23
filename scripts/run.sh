@@ -1,5 +1,5 @@
 #!/bin/bash
-set -x
+set -ex
 WORKSPACE_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "${WORKSPACE_DIR}/devel/setup.bash"
 MAV_NAME="flygripper" #"robot"
@@ -15,31 +15,20 @@ echo "Forward MAVLink to QGC at ${QGC_IP}:${QGC_PORT}/UDP"
 "${WORKSPACE_DIR}/scripts/require_serial_access.sh" /dev/ttyACM0 || exit 1
 roslaunch mavros apm.launch "gcs_url:=udp://@${QGC_IP}:${QGC_PORT}" &
 sleep 10 # wait roscore
-echo "Start Running Ctrl！"
-roslaunch flygripper_flight flight.launch mav_name:=${MAV_NAME} use_sim:=${USE_SIM} &
-sleep 4
-echo "Start Running URDF and SERVO！"
-roslaunch flygripper_bringup run.launch mav_name:=${MAV_NAME} use_sim:=${USE_SIM} gui:=${GUI} &
+# Configure telemetry before the controller; stop startup on a failed core ACK.
+python3 "${WORKSPACE_DIR}/scripts/configure_mavlink_streams.py"
 
-rosrun mavros mavsys message_interval --id=27 --rate=333    # common::RAW_IMU
-#rosrun mavros mavsys message_interval --id=27 --rate=100    # common::RAW_IMU
-#rosrun mavros mavsys message_interval --id=11030 --rate=333 # ardupilotmega::ESC_TELEMETRY_1_TO_4
-rosrun mavros mavsys message_interval --id=65 --rate=100    # common::RC_CHANNELS
-#rosrun mavros mavsys message_interval --id=147 --rate=100   # common::BATTERY_STATUS
-#rosrun mavros mavsys message_interval --id=250 --rate=100   #DEBUG_VECTOR
-#rosrun mavros mavsys message_interval --id=385 --rate=100   #TUNNEL
-rosrun mavros mavsys message_interval --id=245 --rate=5     # common::EXTENDED_SYS_STATE (takeoff ground check)
-#rosrun mavros mavsys message_interval --id=100 --rate=50    # optical_flow
-#rosrun mavros mavsys message_interval --id=100 --rate=100    # optical_flow
-rosrun mavros mavsys message_interval --id=30 --rate=333    # common::ATTITUDE
-#rosrun mavros mavsys message_interval --id=30 --rate=100    # common::ATTITUDE
-
-sleep 4 # wait imu rate to 333
+sleep 4 # allow the requested telemetry rates to settle
 echo "Start Running Mocap Localization！"
 roslaunch vrpn_client_ros sample.launch server:=${MOCAP_IP} &
 sleep 3
 roslaunch ekf nokov.launch &
 sleep 1
+echo "Start Running Ctrl！"
+roslaunch flygripper_flight flight.launch mav_name:=${MAV_NAME} use_sim:=${USE_SIM} &
+sleep 4
+echo "Start Running URDF and SERVO！"
+roslaunch flygripper_bringup run.launch mav_name:=${MAV_NAME} use_sim:=${USE_SIM} gui:=${GUI} &
 wait;
 
 #rostopic pub /flygripper/actuator_command flygripper_msgs/ActuatorCommand "header:

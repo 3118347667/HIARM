@@ -18,19 +18,8 @@ roslaunch mavros apm.launch \
   gcs_url:=udp://@${QGC_IP}:${QGC_PORT} &
 sleep 15 # wait roscore
 
-rosrun mavros mavsys message_interval --id=27 --rate=333    # common::RAW_IMU
-#rosrun mavros mavsys message_interval --id=27 --rate=100    # common::RAW_IMU
-rosrun mavros mavsys message_interval --id=11030 --rate=333 # ardupilotmega::ESC_TELEMETRY_1_TO_4
-rosrun mavros mavsys message_interval --id=65 --rate=100    # common::RC_CHANNELS
-rosrun mavros mavsys message_interval --id=147 --rate=100   # common::BATTERY_STATUS
-rosrun mavros mavsys message_interval --id=250 --rate=100   #DEBUG_VECTOR
-rosrun mavros mavsys message_interval --id=385 --rate=100   #TUNNEL
-rosrun mavros mavsys message_interval --id=245 --rate=5     # common::EXTENDED_SYS_STATE
-#rosrun mavros mavsys message_interval --id=100 --rate=50    # optical_flow
-rosrun mavros mavsys message_interval --id=100 --rate=100    # optical_flow
-rosrun mavros mavsys message_interval --id=30 --rate=333    # common::ATTITUDE
-#rosrun mavros mavsys message_interval --id=30 --rate=100    # common::ATTITUDE
+python3 "${WORKSPACE_DIR}/scripts/configure_mavlink_streams.py"
 
 #roslaunch vrpn_client_ros sample.launch server:=10.1.1.198 &
-sleep 16 # wait imu rate to 333
+sleep 16 # allow the requested telemetry rates to settle
 #roslaunch eskf_fusion ekf_fusion_node.launch &

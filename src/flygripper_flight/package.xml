@@ -8,6 +8,7 @@
 
     <buildtool_depend>catkin</buildtool_depend>
     <depend>roscpp</depend>
+    <depend>diagnostic_msgs</depend>
     <depend>mavros_msgs</depend>
     <depend>flygripper_common</depend>
     <depend>flygripper_controller</depend>

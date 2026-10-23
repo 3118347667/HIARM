@@ -476,6 +476,8 @@ void vioodom_callback(
     VectorXd odom_pose = get_pose_from_VIOodom(msg);
     X_state.segment<3>(0) = odom_pose.segment<3>(0);
     X_state.segment<3>(3) = odom_pose.segment<3>(3);
+    Z_measurement.segment<3>(0) = odom_pose.segment<3>(0);
+    Z_measurement.segment<3>(3) = odom_pose.segment<3>(3);
 
     world_frame_id = msg->header.frame_id;
 
@@ -507,6 +509,11 @@ void vioodom_callback(
       ROS_ERROR("flip over!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
     }
 
+    // The short-IMU-buffer path below also updates the filter. Give it this
+    // frame's measurement before it can return early.
+    Z_measurement.segment<3>(0) = odom_pose.segment<3>(0);
+    Z_measurement.segment<3>(3) = odom_pose.segment<3>(3);
+
 #if TimeSync
     // call back to the proper time
     if (sys_seq.size() == 0) {
@@ -525,8 +532,6 @@ void vioodom_callback(
     search_proper_frame(time_odom_tag_now);
 
 #endif
-    Z_measurement.segment<3>(0) = odom_pose.segment<3>(0);
-    Z_measurement.segment<3>(3) = odom_pose.segment<3>(3);
     // cam_system_pub(msg->header.stamp);
 
 #if !TimeSync // no aligned
@@ -742,10 +747,18 @@ int main(int argc, char **argv) {
                                    ros::TransportHints().tcpNoDelay());
   ros::Subscriber s4 =
       n.subscribe("gt_", 40, gt_callback, ros::TransportHints().tcpNoDelay());
-  odom_pub =
-      n.advertise<nav_msgs::Odometry>("ekf_odom", 1000); // freq = imu freq
+  // Bound outgoing state backlog, preserving the IMU integration queue above.
+  int odom_publish_queue_size = 10;
+  n.param("odom_publish_queue_size", odom_publish_queue_size, 10);
+  if (odom_publish_queue_size < 1 || odom_publish_queue_size > 1000) {
+    ROS_FATAL("odom_publish_queue_size must be between 1 and 1000");
+    return 1;
+  }
+  ROS_INFO("EKF output queue: %d; preserving IMU input queue and measurement timestamps",
+           odom_publish_queue_size);
+  odom_pub = n.advertise<nav_msgs::Odometry>("ekf_odom", odom_publish_queue_size);
   ahead_odom_pub = n.advertise<nav_msgs::Odometry>("ahead_ekf_odom",
-                                                   1000); // freq = imu freq
+                                               odom_publish_queue_size);
   cam_odom_pub = n.advertise<nav_msgs::Odometry>("cam_ekf_odom", 1000);
   acc_filtered_pub =
       n.advertise<geometry_msgs::PoseStamped>("acc_filtered", 1000);

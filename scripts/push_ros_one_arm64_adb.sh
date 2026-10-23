@@ -76,9 +76,10 @@ cleanup_archive() {
 }
 trap cleanup_archive EXIT
 
-echo "Packing src, scripts, devel, and params..."
-COPYFILE_DISABLE=1 tar --no-xattrs --exclude='scripts/.wifi_credentials' \
-  -C "$workspace" -czf "$local_archive" src scripts devel params
+echo "Packing src, scripts, devel, params, and bag recording scripts..."
+COPYFILE_DISABLE=1 tar --no-xattrs --exclude='scripts/.wifi_credentials' --exclude='bags/*.bag' \
+  --exclude='bags/*.bag.active' --exclude='*/__pycache__' \
+  -C "$workspace" -czf "$local_archive" src scripts devel params bags
 local_hash=$(shasum -a 256 "$local_archive" | awk '{print $1}')
 adb -s "$serial" push "$local_archive" "$remote_archive"
 remote_hash=$(adb_shell_checked "sha256sum '$remote_archive'")
@@ -107,6 +108,10 @@ for binary in \
     exit 1
   fi
 done
+for script in bags/bag.sh bags/publish_param_snapshot.py bags/verify_param_recording.py; do
+  test -f "/home/rock/dynamic_grasp/$script"
+done
+bash -n /home/rock/dynamic_grasp/bags/bag.sh
 BOARD_CHECK
 )
 encoded_check=$(printf '%s\n' "$board_check_script" | base64 | tr -d '\n')
