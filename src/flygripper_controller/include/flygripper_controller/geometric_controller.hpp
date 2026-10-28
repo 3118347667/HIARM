@@ -1,4 +1,6 @@
 #pragma once
+#include <cstdint>
+
 #include "flygripper_common/filter/butterworth.hpp"
 #include "flygripper_common/type/robot_parameter.hpp"
 #include "flygripper_controller/controller_base.hpp"
@@ -87,6 +89,12 @@ class GeometricController : public ControllerBase {
   void prepare(const RobotState& state) override;
   void getCommand(const RobotState& state, const ReferenceVector& references,
                   RobotCommand& command, const Scalar& now) override;
+  bool l1Enabled() const {
+    return acc_compensation_ == CompensationMethod::L1 ||
+           alpha_compensation_ == CompensationMethod::L1;
+  }
+  std::uint64_t l1InitializationCount() const { return l1_initialization_count_; }
+  bool thrustSafetyViolated() const { return unsafe_thrust_; }
   Vector<3> getOmegaIntegrationTerm(const Vector<3>& error, bool limit = true);
   void limitTiltAngle(Ref<Vector<3>> des_thrust_acc);
   Vector<3> tiltPrioritizedAttitudeControl(const Quaternion& q_e);
@@ -112,6 +120,8 @@ class GeometricController : public ControllerBase {
   GeometricControllerData data_;
   Scalar control_frequency_;
   Scalar last_ctrl_time_;
+  std::uint64_t l1_initialization_count_{0};
+  bool unsafe_thrust_{false};
 
   ButterworthLPF<3>::Ptr acc_lpf_, omega_lpf_, ctrl_omega_lpf_;
   ButterworthLPF<4>::Ptr rotor_speed_lpf_;

@@ -29,7 +29,7 @@ inline void checkCycleTime(const double &desired_update_time,
     auto tm = *std::localtime(&localtime);
     char buffer[9];
     std::strftime(buffer, sizeof(buffer), "%T", &tm);
-    ROS_WARN_STREAM(buffer
+    ROS_WARN_STREAM_THROTTLE(1.0, buffer
                     <<" Cycle time exceeded error threshold by: "
                     << exceed_threshold << "s, "
                     << "cycle time: " << elapsed_time << "s, "

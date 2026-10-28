@@ -5,6 +5,7 @@
 #include "flygripper_common/utils/math.hpp"
 #include "flygripper_common/utils/rotation.hpp"
 #include "flygripper_controller/geometric_controller_param.hpp"
+#include "flygripper_controller/thrust_safety.hpp"
 #include "flygripper_msgs/GraspState.h"
 
 namespace flygripper_controller {
@@ -203,12 +204,13 @@ void GeometricController::prepare(const RobotState& state) {
 void GeometricController::getCommand(const RobotState& state,
                                      const ReferenceVector& references,
                                      RobotCommand& command, const Scalar& now) {
-  //! Step -1: Check if it is first time in autonomous ctrl
-  bool init = (now - last_ctrl_time_ > 0.3);  // TODO: can load from param
-  if (init) {
+  // Restore the original initialization trigger based on control-call spacing.
+  const bool l1_init = (now - last_ctrl_time_ > 0.3);
+  if (l1_init) {
     ROS_WARN("Reset geometric controller.");
   }
   last_ctrl_time_ = now;
+  unsafe_thrust_ = false;
   //! Step 0: Get current estimated thrust and torque from rotor speed
   auto& ref = references[0];
   // Update control mixing matrix and its inverse matrix
@@ -269,7 +271,7 @@ void GeometricController::getCommand(const RobotState& state,
   // External force defined body frame and compensation
   // L1 here estimate the external [force] in [body] frame
   data_.ext_force_l1 =
-      clipVector(L1AugmentationForce(state.vel, cur_q, des_thrust_norm, init),
+      clipVector(L1AugmentationForce(state.vel, cur_q, des_thrust_norm, l1_init),
                  ctrl_parameter_->L1_force_bound);
   data_.ext_force_indi = clipVector(
       cur_q.inverse() *
@@ -293,6 +295,7 @@ void GeometricController::getCommand(const RobotState& state,
 
   // Again to limit tilt angle after compensation
   limitTiltAngle(des_thrust_acc);
+  if (unsafe_thrust_) des_thrust_acc = -kGravityVector;
   if (ctrl_parameter_->thrust_projection) {
     // project to current attitude
     Vector<3> cur_body_z_axis = cur_q * Vector<3>::UnitZ();
@@ -397,8 +400,9 @@ void GeometricController::getCommand(const RobotState& state,
                      omega_f.cross(robot_parameter_->J * omega_f),
                  ctrl_parameter_->INDI_torque_bound);
   data_.ext_torque_l1 = clipVector(
-      L1AugmentationTorque(ctrl_omega_f, des_torque, init),
+      L1AugmentationTorque(ctrl_omega_f, des_torque, l1_init),
       ctrl_parameter_->L1_torque_bound);  // TODO: state.omega, des_torque);
+  if (l1_init) ++l1_initialization_count_;
 
   if (alpha_compensation_ == CompensationMethod::INDI) {
     // NOTE:use ndi instead of indi for yaw acc to prevent yaw osscilation.
@@ -526,24 +530,17 @@ Vector<3> GeometricController::getOmegaIntegrationTerm(const Vector<3>& error,
 }
 
 void GeometricController::limitTiltAngle(Ref<Vector<3>> des_thrust_acc) {
-  Vector<3> des_B_z = des_thrust_acc.normalized();
-  Scalar des_thrust_acc_z_magnitude =
-      des_thrust_acc.dot(Eigen::Vector3d::UnitZ());
-  Eigen::Vector3d tilt_rotation_axis = Eigen::Vector3d::UnitZ().cross(des_B_z);
-  Scalar tilt_angle = std::acos(Eigen::Vector3d::UnitZ().dot(des_B_z));
-  if (robot_parameter_->tilt_angle_max > 0 &&
-      tilt_angle > robot_parameter_->tilt_angle_max) {
-    ROS_WARN_THROTTLE(0.1,
-                      "Exceed the tilt angle limit, tilt angle: %f, limit: %f",
-                      tilt_angle, robot_parameter_->tilt_angle_max);
-    Eigen::Vector3d limited_z_B =
-        Eigen::AngleAxisd(robot_parameter_->tilt_angle_max,
-                          tilt_rotation_axis) *
-        Eigen::Vector3d::UnitZ();
-    // Update the desired thrust acceleration and its normalized vector
-    des_thrust_acc = des_thrust_acc_z_magnitude /
-                     std::cos(robot_parameter_->tilt_angle_max) * limited_z_B;
+  const auto safe = limitUpwardThrust(
+      {des_thrust_acc.x(), des_thrust_acc.y(), des_thrust_acc.z()},
+      robot_parameter_->collective_thrust_min / robot_parameter_->mass,
+      robot_parameter_->tilt_angle_max, kGravity);
+  if (safe.fault) {
+    unsafe_thrust_ = true;
+    ROS_ERROR_THROTTLE(0.5,
+        "Unsafe thrust acceleration [%.3f, %.3f, %.3f]; using upright hover fallback.",
+        des_thrust_acc.x(), des_thrust_acc.y(), des_thrust_acc.z());
   }
+  des_thrust_acc = Vector<3>(safe.value[0], safe.value[1], safe.value[2]);
 }
 
 Vector<3> GeometricController::tiltPrioritizedAttitudeControl(
@@ -608,7 +605,6 @@ Vector<3> GeometricController::L1AugmentationForce(ConstRef<Vector<3>> vel,
     prev_lpf1 = 0.0;
     prev_lpf1_um = Vector<2>::Zero();
   }
-
   Vector<3> prev_vel_error =
       prev_vel_pred - prev_vel;  // previous prediction error z_tild(k-1)
 
@@ -717,7 +713,6 @@ Vector<3> GeometricController::L1AugmentationTorque(ConstRef<Vector<3>> omega,
     prev_lpf1 = Vector<3>::Zero();
     prev_lpf2 = Vector<3>::Zero();
   }
-
   Vector<3> prev_omega_error =
       prev_omega_pred - prev_omega;  // previous prediction error z_tild(k-1)
 

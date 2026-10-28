@@ -44,7 +44,10 @@ class AutoTakeoffTest(unittest.TestCase):
         self.publish_odom = True
         self.frozen_odom_stamp = None
         self.imu_time_offset = 0.0
+        self.imu_roll = 0.0
         self.publish_extended = True
+        self.extended_period = 0.0
+        self.last_extended_publish = 0.0
         self.ch5 = self.ch6 = 1000
         self.origin = [2.0, -3.0, 0.6]
         self.position = self.origin[:]
@@ -81,13 +84,15 @@ class AutoTakeoffTest(unittest.TestCase):
         self.thread = threading.Thread(target=self.publish, daemon=True)
         self.thread.start()
 
-    def start_node(self, overrides=None):
+    def start_node(self, overrides=None, controller_overrides=None):
         root = rospkg.RosPack().get_path("flygripper_flight")
         controller = rospkg.RosPack().get_path("flygripper_controller")
         for filename in [os.path.join(root, "params/flygripper.yaml"),
                          os.path.join(controller, "params/flygripper.yaml")]:
             for values, _ in rosparam.load_file(filename):
                 rosparam.upload_params("/flygripper", values)
+        for key, value in (controller_overrides or {}).items():
+            rospy.set_param("/flygripper/geometric_controller/" + key, value)
         for values, _ in rosparam.load_file(os.path.join(root, "params/fsm.yaml")):
             values.update(takeoff_height=0.2, takeoff_velocity=0.4,
                           takeoff_acceleration=1.0, takeoff_jerk=4.0,
@@ -137,13 +142,16 @@ class AutoTakeoffTest(unittest.TestCase):
                           system_status=4 if self.armed else 3)
             state.header.stamp = stamp
             self.pubs["state"].publish(state)
-            if self.publish_extended:
+            if (self.publish_extended and
+                    time.monotonic() - self.last_extended_publish >= self.extended_period):
                 ext = ExtendedState(landed_state=self.landed)
                 ext.header.stamp = stamp
                 self.pubs["extended"].publish(ext)
+                self.last_extended_publish = time.monotonic()
             imu = Imu()
             imu.header.stamp = stamp + rospy.Duration(self.imu_time_offset)
-            imu.orientation.w = 1.0
+            imu.orientation.x = math.sin(self.imu_roll / 2)
+            imu.orientation.w = math.cos(self.imu_roll / 2)
             imu.linear_acceleration.z = 9.81
             if self.publish_imu:
                 self.pubs["imu"].publish(imu)
@@ -213,6 +221,8 @@ class AutoTakeoffTest(unittest.TestCase):
         self.trigger()
         self.wait_for(lambda: self.position[2] >= 1.899, "new sortie uses new origin")
         self.assertAlmostEqual(self.references[-1].position_reference.x, 5.0)
+        self.wait_for(lambda: float(self.runtime_values()["l1_initialization_count"]) == 2.0,
+                      "initialize once for the second control session")
 
     def test_disarmed_rejected(self):
         self.armed = False
@@ -221,6 +231,109 @@ class AutoTakeoffTest(unittest.TestCase):
         time.sleep(0.5)
         self.assertFalse(self.mode_requests)
         self.assertFalse(self.commands)
+
+    def test_l1_continues_from_takeoff_through_hover_and_landed_state_jitter(self):
+        # Reproduce the bag's 1 Hz state stream with an interval that crosses
+        # the 1 s freshness threshold. It must not reset the active observer.
+        self.start_node(controller_overrides={"acc_compensation": 2, "alpha_compensation": 2})
+        self.extended_period = 1.05
+        self.trigger()
+        self.wait_ascent()
+        self.wait_for(lambda: self.runtime and
+                      float(self.runtime_values()["l1_initialization_count"]) == 1.0,
+                      "L1 starts with the first takeoff control output")
+        self.assertEqual(float(self.runtime_values()["l1_enabled"]), 1.0)
+        self.wait_for(lambda: self.position[2] >= self.origin[2] + 0.199,
+                      "finish ascent with continuous L1")
+        ascent = [r for r in self.references if r.velocity_reference.z > 0.01]
+        self.assertTrue(ascent, "observe takeoff reference samples")
+        self.assertTrue(any(abs(r.external_force_l1.z) > 1e-6 for r in ascent),
+                        "L1 compensation is active during ascent")
+        time.sleep(2.3)  # Cross multiple slow landed-state publication intervals.
+        self.assertEqual(self.mode, "GUIDED_NOGPS")
+        self.assertAlmostEqual(self.position[2], self.origin[2] + 0.2, places=3)
+        output_count = len(self.commands)
+        self.publish_extended = False
+        time.sleep(1.2)
+        self.assertEqual(self.mode, "GUIDED_NOGPS")
+        self.assertGreater(len(self.commands) - output_count, 50,
+                           "landed-state loss must not interrupt control output")
+        # Even a changed land-detector report cannot reset an ongoing session.
+        self.follow = False
+        self.landed = ExtendedState.LANDED_STATE_ON_GROUND
+        self.extended_period = 0.0
+        self.publish_extended = True
+        time.sleep(0.3)
+        samples = [dict((v.key, v.value) for v in msg.status[0].values) for msg in self.runtime]
+        active = [v for v in samples if float(v.get("l1_initialization_count", 0)) > 0]
+        self.assertTrue(active)
+        self.assertTrue(all(float(v["l1_enabled"]) == 1.0 for v in active))
+        self.assertTrue(all(float(v["l1_initialization_count"]) == 1.0 for v in active),
+                        "takeoff, hover, stale state and ground reports must preserve observer state")
+
+    def assert_upright_fallback_during_takeover(self):
+        self.wait_for(lambda: self.runtime and
+                      float(self.runtime_values().get("l1_initialization_count", 0)) > 0,
+                      "observer initialization diagnostic")
+        initializations = float(self.runtime_values()["l1_initialization_count"])
+        l1_selected = float(self.runtime_values()["l1_enabled"])
+        self.wait_for(lambda: "ALT_HOLD" in self.mode_requests, "unsafe thrust takeover")
+        self.wait_for(lambda: self.runtime and
+                      float(self.runtime_values()["attitude_safety_handover"]) == 1.0,
+                      "latched attitude safety diagnostic")
+        start = len(self.commands)
+        time.sleep(0.25)
+        fallback = self.commands[start:]
+        self.assertGreater(len(fallback), 10, "continue bounded output until confirmation")
+        self.assertTrue(all(1 - 2 * (c.orientation.x ** 2 + c.orientation.y ** 2) > 0.999
+                            for c in fallback), "fallback stays upright")
+        self.assertTrue(all(abs(c.thrust - 0.28) < 0.002 for c in fallback),
+                        "fallback uses hover thrust, not the 0.089 crash command")
+        self.assertEqual(float(self.runtime_values()["l1_enabled"]), l1_selected)
+        self.assertEqual(float(self.runtime_values()["l1_initialization_count"]), initializations,
+                         "safe takeover output must not reset the in-flight L1 observer")
+        self.assertTrue(all(1 - 2 * (c.orientation.x ** 2 + c.orientation.y ** 2) > 0
+                            for c in self.commands), "never publish an inverted target")
+        tilt_limit = rospy.get_param("/flygripper/robot_parameter/tilt_angle_max")
+        self.assertTrue(all(1 - 2 * (c.orientation.x ** 2 + c.orientation.y ** 2) >=
+                            math.cos(tilt_limit) - 1e-9 for c in self.commands),
+                        "every transmitted FCU target respects the configured tilt limit")
+        self.wait_for(lambda: self.mode == "ALT_HOLD", "delayed takeover confirmed")
+        self.assert_stopped()
+
+    def test_l1_negative_vertical_thrust_triggers_upright_takeover(self):
+        self.follow = False
+        self.landed = ExtendedState.LANDED_STATE_IN_AIR
+        # Keep the injected fault independent of the flight tuning in YAML.
+        self.start_node(controller_overrides={"acc_compensation": 2, "k_vel/z": 8.367})
+        self.trigger()
+        self.wait_for(lambda: len(self.commands) > 30, "airborne hover control")
+        self.mode_delay = 0.8
+        # At fixed position this upward velocity step makes L1 subtract more
+        # than the remaining nominal upward acceleration, as in the crash bag.
+        self.velocity[2] = 0.8
+        self.assert_upright_fallback_during_takeover()
+        self.assertIn("Unsafe thrust", self.runtime_values()["last_handover_reason"])
+
+    def test_inverted_frame_alignment_triggers_upright_takeover(self):
+        self.follow = False
+        self.start_node()
+        self.trigger()
+        self.wait_for(lambda: len(self.commands) > 30, "takeoff control")
+        self.mode_delay = 0.8
+        self.imu_roll = math.pi
+        self.assert_upright_fallback_during_takeover()
+        self.assertIn("Unsafe FCU attitude", self.runtime_values()["last_handover_reason"])
+
+    def test_excessive_non_inverted_frame_tilt_triggers_upright_takeover(self):
+        self.follow = False
+        self.start_node()
+        self.trigger()
+        self.wait_for(lambda: len(self.commands) > 30, "takeoff control")
+        self.mode_delay = 0.8
+        self.imu_roll = math.radians(60)  # Upright, but above the configured 30 degrees.
+        self.assert_upright_fallback_during_takeover()
+        self.assertIn("tilt limit exceeded", self.runtime_values()["last_handover_reason"])
 
     def test_wrong_thrust_semantics_rejected(self):
         self.guid_options = 0

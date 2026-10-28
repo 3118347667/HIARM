@@ -39,6 +39,24 @@ APM 接管后油门杆决定升降，请将油门杆放在适合 AltHold 接管�
 `GUID_TIMEOUT=3` 是本机参数记录中的后备行为，不提供动捕位置保持；
 正常结束应先完成飞控模式接管，再停止节点。
 
+当 `acc_compensation: 2` 或 `alpha_compensation: 2` 选择 L1 时，
+力/力矩观测器从自主控制的第一条起飞指令开始运行。初始化恢复原来的
+控制调用间隔判据：`now - last_ctrl_time_ > 0.3` 时，重置预测状态、扰动估计
+和滤波状态；`last_ctrl_time_` 初值为 `-1.0`。新的控制会话不再单独触发初始化。
+起飞转悬停、参考类型改变、`extended_state` 延迟/短暂中断本身不触发重置，
+但即使在空中，控制调用间隔超过 300 ms 也会重置。
+`extended_state` 继续用于进入自主控制和起飞流程的状态判断。
+`runtime_diagnostics/l1_enabled` 表示参数是否选择了 L1；
+`l1_initialization_count` 每次按上述间隔判据初始化时加一。
+
+姿态生成前，目标推力必须有正的竖直分量，并按最大倾角限制水平分量。
+负/零竖直推力或非有限加速度会触发接管；坐标对齐后的 FCU 姿态也会检查
+是否有限、正立并满足配置的最大倾角。此类故障等待模式确认期间，持续发送
+FCU 当前偏航下的水平姿态与配置的悬停推力。保护输出覆盖控制器计算结果，
+此保护本身不清零 L1；是否初始化仍由上述控制调用间隔决定。
+`runtime_diagnostics/attitude_safety_handover` 和 `last_handover_reason`
+记录此保护。该临时输出不保证保持位置或高度，接管完成以 FCU 模式反馈为准。
+
 ## 参数与验证
 
 参数位于 `src/flygripper_flight/params/fsm.yaml`。
@@ -61,6 +79,11 @@ clang++ -std=c++17 -Wall -Wextra -Werror \
   src/flygripper_flight/test/test_takeoff.cpp -o /tmp/hiarm-test-takeoff
 /tmp/hiarm-test-takeoff
 
+clang++ -std=c++17 -Wall -Wextra -Werror \
+  -I src/flygripper_controller/include \
+  src/flygripper_controller/test/test_thrust_safety.cpp -o /tmp/hiarm-test-thrust-safety
+/tmp/hiarm-test-thrust-safety
+
 # 在 ROS One/ROS Noetic 工作区环境中运行；rostest 会创建独立 ROS master。
 source devel/setup.bash
 rostest flygripper_flight auto_takeoff.test
@@ -69,6 +92,10 @@ rostest flygripper_flight auto_takeoff.test
 单元检查覆盖爬升限制、连续稳定判断、相对高度、重复起飞和错误条件。
 ROS 测试运行真实飞行节点，模拟 MAVROS 服务与传感器，覆盖模式确认、
 地面状态、解锁、推力参数、CH6、低油门、重复起飞、数据中断和接管。
+推力安全测试包含 2026-10-26 事故的负竖直推力值、零向量、非有限输入
+和倾角边界；ROS 回归还验证起飞到悬停持续使用 L1、1.05 秒周期的空中状态
+消息及中断不触发重置、补偿导致的推力反向、坐标对齐后的倒置/超倾角目标，
+以及模式确认延迟期间的水平姿态/悬停推力和观测器连续性。
 测试中的里程计跟随参考值，不模拟飞机动力学、APM 电机状态机或落地检测。
 ArduCopter 4.7.2 SITL 闭环测试入口为 `./scripts/test_auto_takeoff_sitl.sh`，
 环境、模型差异和结果文件说明见 [SITL 说明](../docker/arducopter-sitl/README.md)。

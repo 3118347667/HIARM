@@ -12,6 +12,12 @@ find_package(catkin REQUIRED COMPONENTS
 find_package(Threads REQUIRED)
 find_package(Eigen3 REQUIRED)
 
+if(CATKIN_ENABLE_TESTING)
+  add_executable(test_thrust_safety test/test_thrust_safety.cpp)
+  target_include_directories(test_thrust_safety PRIVATE include)
+  add_test(NAME thrust_safety COMMAND test_thrust_safety)
+endif()
+
 generate_dynamic_reconfigure_options(
         cfg/RosGeometricControllerParameter.cfg
 )

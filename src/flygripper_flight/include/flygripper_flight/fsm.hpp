@@ -243,6 +243,7 @@ class Fsm {
   Scalar extended_state_stamp_{INF};
   TakeoffPlan takeoff_plan_;
   bool takeoff_requested_{false};
+  bool attitude_safety_handover_{false};
   bool velocity_teleop_ready_{false};
   Scalar mode_request_start_{0.0};
   Scalar last_mode_request_{-INF};

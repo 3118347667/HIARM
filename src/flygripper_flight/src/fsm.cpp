@@ -3,6 +3,7 @@
 #include "flygripper_common/type/const.hpp"
 #include "flygripper_common/utils/realtime.hpp"
 #include "flygripper_common/utils/runtime_profiler.hpp"
+#include "flygripper_controller/thrust_safety.hpp"
 #include "flygripper_msgs/GraspState.h"
 #include "mavros_msgs/SetMode.h"
 #include "mavros_msgs/ParamGet.h"
@@ -428,6 +429,7 @@ void Fsm::controlLoop(const ros::TimerEvent &event) {
       fsm_state_ == FsmState::STATE_HANDOVER) &&
       guided_entry_verified_ && fc_state_.armed && fc_state_.mode == "GUIDED_NOGPS") {
     //! Controller execution
+    auto* geometric = static_cast<GeometricController*>(controller_.get());
     static flygripper_common::RuntimeProfiler control_profiler(
         "trajectory_tracking_control", 1000);
     {
@@ -435,6 +437,10 @@ void Fsm::controlLoop(const ros::TimerEvent &event) {
       const double started = steadySeconds();
       controller_->getCommand(robot_state_, references_, robot_command_, now_);
       compute_duration_ = steadySeconds() - started;
+    }
+    if (geometric->thrustSafetyViolated()) {
+      attitude_safety_handover_ = true;
+      beginHandover("Unsafe thrust direction or non-finite acceleration");
     }
     tic_toc_.toc("control");
 
@@ -501,6 +507,27 @@ void Fsm::controlLoop(const ros::TimerEvent &event) {
         robot_command_.attitude_command =
             imu_.att * odom_.att.inverse() *
             robot_command_.attitude; // Align with FCU Frame
+        // Frame alignment must preserve the configured maximum tilt as well
+        // as an upright, finite target.
+        const auto& q = robot_command_.attitude_command;
+        if (!q.coeffs().allFinite() || !std::isfinite(q.norm()) || q.norm() < 1e-6 ||
+            !flygripper_controller::uprightTiltWithinLimit(
+                (q.normalized() * Vector<3>::UnitZ()).z(), robot_param_->tilt_angle_max)) {
+          attitude_safety_handover_ = true;
+          beginHandover("Unsafe FCU attitude after frame alignment (invalid or tilt limit exceeded)");
+        }
+        if (attitude_safety_handover_) {
+          // Latch this fallback until mode feedback confirms FCU takeover.
+          // Use FCU yaw directly; do not reapply the suspect frame alignment.
+          const Quaternion current = imu_.att.normalized();
+          const double yaw = std::atan2(
+              2.0 * (current.w() * current.z() + current.x() * current.y()),
+              1.0 - 2.0 * (current.y() * current.y() + current.z() * current.z()));
+          robot_command_.attitude_command = Quaternion(
+              Eigen::AngleAxis<Scalar>(yaw, Vector<3>::UnitZ()));
+          robot_command_.collective_thrust = robot_param_->mass * kGravity;
+        }
+        robot_command_.attitude_command.normalize();
         robot_command_.collective_thrust_command = thrust_acc_map_.map(
             robot_command_.collective_thrust / robot_param_->mass);
         if (!std::isfinite(robot_command_.collective_thrust_command) ||
@@ -650,7 +677,7 @@ bool Fsm::updateRobotState() {
   } else if (!rc_input_.valid()) {
     ret = false;
     fault_reason_ += "RC invalid; ";
-    ROS_WARN("RC In data invalid!");
+    ROS_WARN_THROTTLE(1.0, "RC In data invalid!");
   } else {
     velocity_control_.des_vel.x() =
         rc_input_.channels[AXIS_PITCH] * fsm_param_->velocity_scale_x;
@@ -1109,6 +1136,7 @@ bool Fsm::prepareGuidedEntry() {
   // result may authorize this session; an earlier success must not be reused.
   const auto worker = mode_worker_->status();
   if (worker.busy || worker.pending) return false;
+  attitude_safety_handover_ = false;
   guided_entry_completed_baseline_ = worker.completed;
   return true;
 }
@@ -1193,7 +1221,7 @@ void Fsm::publishRuntimeDiagnostics() {
   };
   add("imu_header_age_ms", (now_ - imu_.stamp) * 1000.0);
   add("odom_header_age_ms", (now_ - odom_.stamp) * 1000.0);
-  // Age already present at callback entry, including timestamp mapping errors.
+  // Age when stored after acquiring input_mutex_, including timestamp mapping errors.
   add("imu_age_at_callback_ms", applied_.imu.message
       ? (applied_.imu.received_ros - applied_.imu.message->header.stamp.toSec()) * 1000.0 : -1.0);
   add("odom_age_at_callback_ms", applied_.odom.message
@@ -1225,6 +1253,10 @@ void Fsm::publishRuntimeDiagnostics() {
   add("control_compute_ms", compute_duration_ * 1000.0);
   add("control_work_ms", control_duration_ * 1000.0);
   add("control_work_max_ms", max_control_duration_ * 1000.0);
+  add("l1_enabled", static_cast<GeometricController*>(controller_.get())->l1Enabled());
+  add("l1_initialization_count",
+      static_cast<GeometricController*>(controller_.get())->l1InitializationCount());
+  add("attitude_safety_handover", attitude_safety_handover_);
   const auto worker = mode_worker_->status();
   add("mode_request_busy", worker.busy);
   add("mode_request_pending", worker.pending);
