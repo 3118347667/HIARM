@@ -29,6 +29,7 @@ from rosbags.highlevel import AnyReader
 
 
 DEFAULT_BAG = Path("/Users/lzf/Documents/wfzf/8/2026-10-23-11-18-10.bag")
+CHAT_OUTPUT_ROOT = Path(__file__).resolve().parents[2] / "chat"
 ANSI_ESCAPE = re.compile(r"\x1b\[[0-9;]*m")
 REF_TRANSITION = re.compile(r"\bRef:\s*(\w+)\s*=>\s*(\w+)")
 
@@ -208,7 +209,15 @@ def write_csv(path, rows, fields):
         writer.writerows(rows)
 
 
-def analyze(bag, output, namespace, on_plot=None):
+def default_output_path(bag):
+    """Return the shared chat output directory for a bag's tracking report."""
+    return CHAT_OUTPUT_ROOT / f"{Path(bag).expanduser().stem}_tracking"
+
+
+def analyze(bag, output=None, namespace="flygripper", on_plot=None):
+    if output is None:
+        output = default_output_path(bag)
+    output = Path(output)
     bag_start, events, trajectories, goals, samples = read_bag(bag, namespace)
     windows = tracking_windows(events, trajectories, goals, samples)
     output.mkdir(parents=True, exist_ok=True)
@@ -281,14 +290,13 @@ def analyze(bag, output, namespace, on_plot=None):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("bag", nargs="?", type=Path, default=DEFAULT_BAG)
-    parser.add_argument("--output", type=Path, help="Output directory; default is next to the bag")
+    parser.add_argument("--output", type=Path, help="Output directory; default is under the workspace chat folder")
     parser.add_argument("--namespace", default="flygripper", help="Vehicle ROS namespace")
     args = parser.parse_args()
     bag = args.bag.expanduser().resolve()
     if not bag.is_file():
         parser.error(f"Bag does not exist: {bag}")
-    output = args.output.expanduser().resolve() if args.output else bag.with_suffix("").with_name(
-        bag.stem + "_tracking")
+    output = args.output.expanduser().resolve() if args.output else default_output_path(bag)
     try:
         summaries = analyze(bag, output, args.namespace.strip("/"))
     except (OSError, ValueError) as exc:

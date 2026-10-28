@@ -29,7 +29,6 @@ __pycache__/
 # Local build and browser artifacts
 .catkin_tools/
 /.playwright-cli/
-/output/playwright/
 docker/ros-one-jammy/vendor/
 build_catkin/
 logs_catkin/

@@ -21,6 +21,8 @@ TOPICS=(
   # Motion capture and state estimation
   /vrpn_client_node/HIARM3/pose
   /vrpn_client_node/HIARM3/twist
+  /vrpn_client_node/HIARM_car/pose
+  /vrpn_client_node/HIARM_car/twist
   /ekf/ekf_odom
   /vins_estimator/imu_propagate
   /target_ekf_node/target_odom
