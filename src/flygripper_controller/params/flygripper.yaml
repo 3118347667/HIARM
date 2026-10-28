@@ -17,12 +17,12 @@ geometric_controller: # hover version
   #k_pos: {x: 4.0, y: 4.0, z: 3.0}
 
   # k_pos: {x: 4.5, y: 4.5, z: 3.5}
-  k_pos: {x: 3.0, y: 3.0, z: 2.5} # bottle
-  # k_pos: {x: 2.5, y: 2.5, z: 4.75} # bottle
+  # k_pos: {x: 3.0, y: 3.0, z: 2.5} # traj 8
+  k_pos: {x: 3.49, y: 3.49, z: 4.183} # bottle
   # k_pos: {x: 3.0, y: 3.0, z: 3.5} # ballon
 
-  k_vel: {x: 4.0, y: 4.0, z: 2.5} # bottle
-  # k_vel: {x: 2.5, y: 2.5, z: 4.7} # bottle
+  # k_vel: {x: 4.0, y: 4.0, z: 2.5} # traj 8
+  k_vel: {x: 6.899, y: 6.899, z: 8.367} # bottle
   # k_vel: {x: 2, y: 2, z: 3.5} # ballon
 
   k_att: {x: 7.0, y: 7.0, z: 3.0}     #{x: 12.0, y: 12.0, z: 8.0}
@@ -56,6 +56,6 @@ geometric_controller: # hover version
 
   As_v: -3.0
   As_omega: -10.0
-  thrust_flt1_cutoff_freq: 10.0
+  thrust_flt1_cutoff_freq: 4.0
   torque_flt1_cutoff_freq: 5.0
   torque_flt2_cutoff_freq: 15.0

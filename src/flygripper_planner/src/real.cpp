@@ -1,5 +1,7 @@
 #include <ros/ros.h>
 #include <tf/tf.h>
+#include <chrono>
+#include <cmath>
 #include <iostream>
 
 #include <geometry_msgs/PoseStamped.h>
@@ -233,6 +235,15 @@ class TaskScheduler{
         !getTaskParam(pnh)){
       throw ros::Exception("Failed to load parameters");
     }
+    getParamDefault("morph_use_feedback", morph_use_feedback_, true, pnh);
+    if (!morph_use_feedback_ &&
+        (!std::isfinite(morph_duration_) || morph_duration_ < 0.0)) {
+      throw ros::Exception("morph_duration must be finite and non-negative");
+    }
+    if (!morph_use_feedback_) {
+      ROS_WARN("Actuator feedback is ignored; morphing completes after %.3f s "
+               "without confirming physical motion", morph_duration_);
+    }
 
     // printing
     for (int i = 0; i < int(stage_data_.size()); i++)
@@ -367,10 +378,11 @@ class TaskScheduler{
 
   void run(){
     Scalar now = ros::Time::now().toSec();
-    //! Make sure odom and actuator_state message has been received
+    //! Feedback is required only when configured as the completion criterion.
     if (odom_.valid() && odom_.isReceived(now) &&
         rc_input_.valid() && rc_input_.isReceived(now) &&
-        actuator_state_.valid() && actuator_state_.isReceived(now) &&
+        (!morph_use_feedback_ ||
+         (actuator_state_.valid() && actuator_state_.isReceived(now))) &&
         stage_ >= 0 &&
         stage_ < int(stage_data_.size()))
     {
@@ -445,7 +457,11 @@ class TaskScheduler{
       //! Morphing executing
       if (morphing_status_ == MorphingStatus::EXECUTING) {
         if (isMorphingCompleted()){
-          ROS_INFO("\033[32m stage %d Morphing reached\033[32m", stage_);
+          if (morph_use_feedback_ || stage_data_[stage_].morph_action == MorphingAction::IDLE) {
+            ROS_INFO("\033[32m stage %d Morphing reached\033[32m", stage_);
+          } else {
+            ROS_WARN("stage %d morphing wait elapsed; physical motion is unconfirmed", stage_);
+          }
           morphing_status_ = MorphingStatus::DONE;
         }
       }
@@ -746,6 +762,13 @@ class TaskScheduler{
   }
 
   bool isMorphingCompleted(){
+    if (stage_data_[stage_].morph_action == MorphingAction::IDLE) {
+      return true;
+    }
+    if (!morph_use_feedback_) {
+      return std::chrono::duration<double>(std::chrono::steady_clock::now() -
+                                           morph_command_time_).count() >= morph_duration_;
+    }
     bool completed = false;
     completed |= (stage_data_[stage_].morph_action == MorphingAction::SHRINKING &&
         (actuator_state_.overload ||
@@ -796,10 +819,12 @@ class TaskScheduler{
     case MorphingAction::SHRINKING:
       actuator_command_msg.reference_position = morph_shrink_pos_;
       actuator_pub_.publish(actuator_command_msg);
+      morph_command_time_ = std::chrono::steady_clock::now();
       break;
     case MorphingAction::EXPANDING:
       actuator_command_msg.reference_position = morph_expand_pos_;
       actuator_pub_.publish(actuator_command_msg);
+      morph_command_time_ = std::chrono::steady_clock::now();
       break;
     case MorphingAction::IDLE:
       // do nothing is ok
@@ -832,6 +857,8 @@ class TaskScheduler{
   Scalar morph_shrink_pos_;
   Scalar morph_expand_pos_;
   Scalar morph_duration_;
+  bool morph_use_feedback_ = true;
+  std::chrono::steady_clock::time_point morph_command_time_{};
   bool use_odom_init_vel_;
 
   PlanStatus plan_status_ = PlanStatus::IDLE;

@@ -36,7 +36,7 @@ traj_trigger: true # Publish trigger while switching to TRAJ MODE
 
 # Velocity Teleop
 velocity_teleop: true # Use rc channel 0,1,2,3 to control the velocity in traj mode
-world_frame_velocity: true # Velocity teleportation in world frame or body frame
+world_frame_velocity: false # Velocity teleportation in world frame or body frame
 velocity_scale_x: -0.3
 velocity_scale_y: -0.3
 velocity_scale_z: 0.3

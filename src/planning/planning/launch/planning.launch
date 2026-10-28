@@ -75,7 +75,7 @@
     <param name="grasp_vz" value="0.0"/>
     <param name="replan_head_time" value="0.003"/>
 
-    <param name="grasp_position" value="0.0"/>
+    <param name="grasp_position" value="-12.7"/>
     <param name="prediction/rho_a" value="1.0"/>
     <param name="prediction/vmax" value="4.0"/>
     <!-- Seconds for smoothing mocap yaw rate; limit is in rad/s. -->

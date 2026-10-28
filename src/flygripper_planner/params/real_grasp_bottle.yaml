@@ -22,9 +22,10 @@ fix_p: true
 magic_number: 0
 
 # ------------------------ Morphing -------------------------------
-morph_shrink_pos: -10.0 # 5.0 shrink angle position
+morph_shrink_pos: -12.7 # 5.0 shrink angle position
 morph_expand_pos: 0.0 # expand angle position
-morph_duration: 0.81
+morph_duration: 0.81 # seconds to wait after each actuator command
+morph_use_feedback: false # advance after the wait without checking actuator feedback
 
 # ----------------------------- Task -------------------------------
 # task_num: assign task number
@@ -63,7 +64,7 @@ task_num: 3
 task_0: # Align
   plan_type: 0 # POINT
   plan_point_num: 1
-  plan_point_0: {x: 0.39, y: -0.603, z: 1.505, yaw: 0.0} # flying to a hovering point
+  plan_point_0: {x: -2.4646, y: -0.8616, z: 0.607, yaw: 0.0} # flying to a hovering point
   plan_terminal_vel: { x: 0.0, y: 0.0, z: 0.0}
   plan_max_vel: 0.6
   plan_max_acc: 0.6
@@ -78,7 +79,7 @@ task_0: # Align
 task_1: # Grasping
   plan_type: 0 # POINT
   plan_point_num: 1
-  plan_point_0: { x: 2.39, y: -0.603, z: 1.505} # flying towards and GRASPING the object
+  plan_point_0: { x: -1.0646, y: -0.8616, z: 0.607} # flying towards and GRASPING the object
   plan_terminal_vel: { x: 0.0, y: 0.0, z: 0.0}
   plan_max_vel: 1.2
   plan_max_acc: 2.0
@@ -93,15 +94,15 @@ task_1: # Grasping
 task_2:  # Releasing
   plan_type: 0 # POINT
   plan_point_num: 2
-  plan_point_0: { x: 2.49, y: -0.603, z: 1.67 } # flying upwards
-  plan_point_1: { x: 4.39, y: -0.603, z: 1.67 } # flying forwards
+  plan_point_0: { x: -0.9646, y: -0.8616, z: 0.807 } # flying upwards
+  plan_point_1: { x: 0.927, y: -0.77, z: 1.0 } # release waypoint
   plan_terminal_vel: { x: 0.0, y: 0.0, z: 0.0}
   plan_max_vel: 0.8
   plan_max_acc: 1.5
   plan_max_dyaw: 0.5
   plan_tolerance: 0.05
 
-  morph_action: 0  # expanding
+  morph_action: 1  # expanding
   morph_trigger: 1 # after reach goal
   morph_auto: true
   morph_tolerance: 0.1 # morph angle tolerance
