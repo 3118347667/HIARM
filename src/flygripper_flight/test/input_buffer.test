@@ -1,0 +1,4 @@
+<launch>
+  <test test-name="input_buffer_contract" pkg="flygripper_flight"
+        type="test_input_buffer" time-limit="45"/>
+</launch>

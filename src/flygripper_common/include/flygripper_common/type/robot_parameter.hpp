@@ -1,4 +1,5 @@
 #pragma once
+#include <cmath>
 #include <memory>
 #include <Eigen/Dense>
 #include "flygripper_common/type/base.hpp"
@@ -33,7 +34,7 @@ class RobotParameter{
   Scalar collective_thrust_max{INF};
   Vector<3> torque_max{Vector<3>::Constant(INF)};
   Vector<3> bodyrates_max{Vector<3>::Constant(INF)};
-  Scalar tilt_angle_max{INF}; // maximum of tilt angle
+  Scalar tilt_angle_max{INF}; // maximum tilt angle in radians
   /** Limit of velocity and acceleration mode **/
   Scalar velocity_max{INF};
   Scalar acceleration_max{INF};
@@ -174,7 +175,9 @@ class RobotParameterConfig:
     if (!getParam("acceleration_max", params.acceleration_max, pnh)) return false;
     if (!getParam("torque_max", params.torque_max, pnh)) return false;
     if (!getParam("bodyrates_max", params.bodyrates_max, pnh)) return false;
-    if (!getParam("tilt_angle_max", params.tilt_angle_max, pnh)) return false;
+    Scalar tilt_angle_max_deg;
+    if (!getParam("tilt_angle_max_deg", tilt_angle_max_deg, pnh)) return false;
+    params.tilt_angle_max = tilt_angle_max_deg * M_PI / 180.0;
     if (!getParam("dynamic_mixing", params.dynamic_mixing, pnh)) return false;
 
     // config from ROS static parameters
@@ -235,7 +238,7 @@ class RobotParameterConfig:
 
     config.velocity_max = params.velocity_max;
     config.acceleration_max = params.acceleration_max;
-    config.tilt_angle_max = params.tilt_angle_max;
+    config.tilt_angle_max_deg = params.tilt_angle_max * 180.0 / M_PI;
 
     config.bodyrates_max_x = params.bodyrates_max.x();
     config.bodyrates_max_y = params.bodyrates_max.y();
@@ -265,7 +268,7 @@ class RobotParameterConfig:
     params.collective_thrust_max = config.collective_thrust_max;
     params.velocity_max = config.velocity_max;
     params.acceleration_max = config.acceleration_max;
-    params.tilt_angle_max = config.tilt_angle_max;
+    params.tilt_angle_max = config.tilt_angle_max_deg * M_PI / 180.0;
     params.torque_max.x() = config.torque_max_x;
     params.torque_max.y() = config.torque_max_y;
     params.torque_max.z() = config.torque_max_z;

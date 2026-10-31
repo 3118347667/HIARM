@@ -4,6 +4,7 @@
 The odometry follower copies controller references; this tests the state machine
 and MAVROS contract, not vehicle dynamics or ArduPilot's motor/land detector.
 """
+import json
 import math
 import os
 import signal
@@ -17,8 +18,10 @@ import rosparam
 import rospkg
 import rospy
 import rostest
+from dynamic_reconfigure.client import Client
 from diagnostic_msgs.msg import DiagnosticArray
-from flygripper_msgs.msg import GeometricControllerData
+from flygripper_msgs.msg import (FlightTrajectoryStatus, GeometricControllerData,
+                                Polynomial, PolynomialTrajectory)
 from geometry_msgs.msg import PoseStamped
 from mavros_msgs.msg import AttitudeTarget, ExtendedState, ParamValue, RCIn, State
 from mavros_msgs.srv import ParamGet, ParamGetResponse, SetMode, SetModeResponse
@@ -39,7 +42,9 @@ class AutoTakeoffTest(unittest.TestCase):
         self.confirm_modes = True
         self.mode_delay = 0.0
         self.runtime = []
+        self.publish_times = []
         self.publish_imu = True
+        self.publish_rc = True
         self.follow = True
         self.publish_odom = True
         self.frozen_odom_stamp = None
@@ -49,6 +54,8 @@ class AutoTakeoffTest(unittest.TestCase):
         self.extended_period = 0.0
         self.last_extended_publish = 0.0
         self.ch5 = self.ch6 = 1000
+        self.pitch = 1500
+        self.throttle = 1000
         self.origin = [2.0, -3.0, 0.6]
         self.position = self.origin[:]
         self.velocity = [0.0] * 3
@@ -56,6 +63,7 @@ class AutoTakeoffTest(unittest.TestCase):
         self.references = []
         self.mode_requests = []
         self.triggers = []
+        self.flight_status = []
         self.process = None
         self.latest_reference = None
         self.directory = tempfile.TemporaryDirectory(prefix="hiarm-takeoff-test-")
@@ -66,10 +74,13 @@ class AutoTakeoffTest(unittest.TestCase):
             "imu": rospy.Publisher("/mavros/imu/data", Imu, queue_size=10),
             "odom": rospy.Publisher("/ekf/ekf_odom", Odometry, queue_size=10),
             "rc": rospy.Publisher("/mavros/rc/in", RCIn, queue_size=10),
+            "trajectory": rospy.Publisher("/flygripper/trajectory", PolynomialTrajectory, queue_size=10),
         }
         self.subs = [
             rospy.Subscriber("/flygripper/runtime_diagnostics", DiagnosticArray,
                              lambda msg: self.runtime.append(msg)),
+            rospy.Subscriber("/flygripper/flight_trajectory_status", FlightTrajectoryStatus,
+                             lambda msg: self.flight_status.append(msg)),
             rospy.Subscriber("/mavros/setpoint_raw/attitude", AttitudeTarget,
                              lambda msg: self.commands.append(msg)),
             rospy.Subscriber("/flygripper/geometric_controller/data", GeometricControllerData,
@@ -130,6 +141,7 @@ class AutoTakeoffTest(unittest.TestCase):
     def publish(self):
         while self.running and not rospy.is_shutdown():
             stamp = rospy.Time.now()
+            self.publish_times.append(stamp.to_sec())
             if self.follow and self.latest_reference is not None and self.mode == "GUIDED_NOGPS":
                 r = self.latest_reference
                 self.position = [r.position_reference.x, r.position_reference.y,
@@ -139,6 +151,7 @@ class AutoTakeoffTest(unittest.TestCase):
                 if self.position[2] - self.origin[2] > 0.03:
                     self.landed = ExtendedState.LANDED_STATE_IN_AIR
             state = State(connected=True, armed=self.armed, mode=self.mode,
+                          guided=self.mode == "GUIDED_NOGPS",
                           system_status=4 if self.armed else 3)
             state.header.stamp = stamp
             self.pubs["state"].publish(state)
@@ -162,10 +175,11 @@ class AutoTakeoffTest(unittest.TestCase):
                 odom.pose.pose.position.x, odom.pose.pose.position.y, odom.pose.pose.position.z = self.position
                 odom.twist.twist.linear.x, odom.twist.twist.linear.y, odom.twist.twist.linear.z = self.velocity
                 self.pubs["odom"].publish(odom)
-            rc = RCIn(channels=[1500, 1500, 1000, 1500, self.ch5, self.ch6,
+            rc = RCIn(channels=[1500, self.pitch, self.throttle, 1500, self.ch5, self.ch6,
                                 1000, 1000, 1500, 1000])
             rc.header.stamp = stamp
-            self.pubs["rc"].publish(rc)
+            if self.publish_rc:
+                self.pubs["rc"].publish(rc)
             time.sleep(0.01)
 
     def wait_for(self, predicate, description, timeout=5):
@@ -223,6 +237,157 @@ class AutoTakeoffTest(unittest.TestCase):
         self.assertAlmostEqual(self.references[-1].position_reference.x, 5.0)
         self.wait_for(lambda: float(self.runtime_values()["l1_initialization_count"]) == 2.0,
                       "initialize once for the second control session")
+
+    def test_flight_trajectory_status_tracks_actual_control(self):
+        self.start_node()
+        self.wait_for(lambda: self.flight_status, "initial status")
+        self.assertFalse(self.flight_status[-1].trajectory_active)
+
+        self.trigger()
+        self.wait_for(lambda: self.position[2] >= 0.799, "takeoff target")
+        self.wait_for(lambda: self.flight_status and
+                      self.flight_status[-1].fsm_state == FlightTrajectoryStatus.FSM_GUIDED and
+                      self.flight_status[-1].reference_type == FlightTrajectoryStatus.REF_HOVER,
+                      "takeoff completed")
+        self.ch6 = 2000
+        self.wait_for(lambda: self.flight_status and
+                      self.flight_status[-1].fsm_state == FlightTrajectoryStatus.FSM_TRAJ,
+                      "trajectory mode")
+        self.assertFalse(self.flight_status[-1].trajectory_active)
+
+        trajectory = PolynomialTrajectory(id=42, heading_mode=PolynomialTrajectory.HAEDING_NONE)
+        trajectory.header.stamp = rospy.Time.now()
+        trajectory.xyz_pieces = [Polynomial(order=5, dim=3, duration=3.0,
+                                            coeff=[0.0] * 15 + self.position[:])]
+        self.pubs["trajectory"].publish(trajectory)
+        self.wait_for(lambda: self.flight_status and self.flight_status[-1].trajectory_active and
+                      self.flight_status[-1].trajectory_id == 42, "sampled trajectory status")
+        active = self.flight_status[-1]
+        self.assertEqual(trajectory.header.stamp, active.trajectory_start)
+        self.assertTrue(active.fcu_state_fresh and active.fcu_armed and active.fcu_guided_nogps)
+        self.assertEqual(active.reference_type, FlightTrajectoryStatus.REF_TRAJ)
+
+        # A newly received malformed message must invalidate the old trajectory,
+        # including when the sender reuses its ID and timestamp.
+        malformed = PolynomialTrajectory(id=42)
+        malformed.header.stamp = trajectory.header.stamp
+        self.pubs["trajectory"].publish(malformed)
+        self.wait_for(lambda: self.flight_status and not self.flight_status[-1].trajectory_active,
+                      "invalid trajectory clears active status")
+
+        trajectory.id = 43
+        trajectory.header.stamp = rospy.Time.now()
+        self.pubs["trajectory"].publish(trajectory)
+        self.wait_for(lambda: self.flight_status and self.flight_status[-1].trajectory_active and
+                      self.flight_status[-1].trajectory_id == 43, "new trajectory accepted")
+
+        future = PolynomialTrajectory(id=44, heading_mode=PolynomialTrajectory.HAEDING_NONE)
+        future.xyz_pieces = trajectory.xyz_pieces
+        future.header.stamp = rospy.Time.now() + rospy.Duration(0.2)
+        checkpoint = len(self.flight_status)
+        self.pubs["trajectory"].publish(future)
+        time.sleep(0.12)
+        self.assertTrue(self.flight_status[checkpoint:])
+        self.assertTrue(all(s.trajectory_active and s.trajectory_id == 43
+                            for s in self.flight_status[checkpoint:]),
+                        "future successor must not interrupt the active trajectory")
+        self.wait_for(lambda: self.flight_status and self.flight_status[-1].trajectory_active and
+                      self.flight_status[-1].trajectory_id == 44, "future trajectory activated")
+
+        too_far = PolynomialTrajectory(id=45, heading_mode=PolynomialTrajectory.HAEDING_NONE)
+        too_far.header.stamp = rospy.Time.now()
+        too_far.xyz_pieces = [Polynomial(order=5, dim=3, duration=3.0,
+                                         coeff=[0.0] * 15 + [100.0, 100.0, 100.0])]
+        self.pubs["trajectory"].publish(too_far)
+        self.wait_for(lambda: self.flight_status and not self.flight_status[-1].trajectory_active,
+                      "sampler rejection clears active status")
+        trajectory.id = 46
+        trajectory.header.stamp = rospy.Time.now()
+        self.pubs["trajectory"].publish(trajectory)
+        self.wait_for(lambda: self.flight_status and self.flight_status[-1].trajectory_active and
+                      self.flight_status[-1].trajectory_id == 46, "accepted after rejection")
+        self.ch6 = 1000
+        self.wait_for(lambda: self.flight_status and not self.flight_status[-1].trajectory_active,
+                      "CH6 exit clears active status")
+        self.ch6 = 2000
+        self.wait_for(lambda: self.flight_status and
+                      self.flight_status[-1].fsm_state == FlightTrajectoryStatus.FSM_TRAJ,
+                      "reenter trajectory mode")
+        trajectory.id = 47
+        trajectory.header.stamp = rospy.Time.now()
+        self.pubs["trajectory"].publish(trajectory)
+        self.wait_for(lambda: self.flight_status and self.flight_status[-1].trajectory_active and
+                      self.flight_status[-1].trajectory_id == 47, "trajectory before disarming")
+        self.armed = False
+        self.wait_for(lambda: self.flight_status and not self.flight_status[-1].trajectory_active and
+                      not self.flight_status[-1].fcu_armed, "disarming clears active status")
+
+
+    def test_reentry_rejects_old_and_distant_trajectory(self):
+        self.start_node()
+        self.trigger()
+        self.wait_for(lambda: self.position[2] >= 0.799, "takeoff target")
+        self.wait_for(lambda: self.flight_status and
+                      self.flight_status[-1].fsm_state == FlightTrajectoryStatus.FSM_GUIDED and
+                      self.flight_status[-1].reference_type == FlightTrajectoryStatus.REF_HOVER,
+                      "takeoff completed")
+        self.ch6 = 2000
+        self.wait_for(lambda: self.flight_status and
+                      self.flight_status[-1].fsm_state == FlightTrajectoryStatus.FSM_TRAJ,
+                      "first trajectory mode")
+
+        def hold(ident, position):
+            trajectory = PolynomialTrajectory(id=ident, heading_mode=PolynomialTrajectory.HAEDING_NONE)
+            trajectory.header.stamp = rospy.Time.now()
+            trajectory.xyz_pieces = [Polynomial(order=5, dim=3, duration=10.0,
+                                                coeff=[0.0] * 15 + position[:])]
+            return trajectory
+
+        old_position = self.position[:]
+        self.pubs["trajectory"].publish(hold(100, old_position))
+        self.wait_for(lambda: self.flight_status and self.flight_status[-1].trajectory_active and
+                      self.flight_status[-1].trajectory_id == 100, "first trajectory active")
+        self.ch6 = 1000
+        self.wait_for(lambda: self.flight_status and
+                      self.flight_status[-1].fsm_state == FlightTrajectoryStatus.FSM_GUIDED,
+                      "return to guided")
+        # Move the reference and the simulated vehicle in GUIDED mode.
+        self.throttle = 1500
+        time.sleep(0.3)
+        self.pitch = 1000
+        self.wait_for(lambda: self.position[0] > old_position[0] + 0.8,
+                      "manual motion away from old hold", timeout=7)
+        self.pitch = 1500
+        self.wait_for(lambda: self.flight_status and
+                      self.flight_status[-1].reference_type == FlightTrajectoryStatus.REF_HOVER,
+                      "manual movement settled")
+        self.ch6 = 2000
+        self.wait_for(lambda: self.flight_status and
+                      self.flight_status[-1].fsm_state == FlightTrajectoryStatus.FSM_TRAJ,
+                      "second trajectory mode")
+        # A cached trajectory and a freshly stamped old hold must both be rejected.
+        self.pubs["trajectory"].publish(hold(101, old_position))
+        time.sleep(0.3)
+        self.assertFalse(self.flight_status[-1].trajectory_active)
+        self.assertEqual("GUIDED_NOGPS", self.mode)
+        self.assertGreater(self.references[-1].position_reference.x, old_position[0] + 0.8)
+        wrong_heading = hold(103, self.position)
+        wrong_heading.heading_mode = PolynomialTrajectory.HEADING_POLY
+        wrong_heading.heading_pieces = [Polynomial(order=3, dim=1, duration=10.0,
+                                                    coeff=[0.0, 0.0, 0.0, math.pi / 2])]
+        self.pubs["trajectory"].publish(wrong_heading)
+        time.sleep(0.2)
+        self.assertFalse(self.flight_status[-1].trajectory_active,
+                         "a stale heading must not be accepted at the current position")
+        wrong_velocity = hold(104, self.position)
+        wrong_velocity.xyz_pieces[0].coeff[12] = 0.5
+        self.pubs["trajectory"].publish(wrong_velocity)
+        time.sleep(0.2)
+        self.assertFalse(self.flight_status[-1].trajectory_active,
+                         "a trajectory with a large velocity jump must not be accepted")
+        self.pubs["trajectory"].publish(hold(102, self.position))
+        self.wait_for(lambda: self.flight_status and self.flight_status[-1].trajectory_active and
+                      self.flight_status[-1].trajectory_id == 102, "current trajectory active")
 
     def test_disarmed_rejected(self):
         self.armed = False
@@ -294,7 +459,7 @@ class AutoTakeoffTest(unittest.TestCase):
                          "safe takeover output must not reset the in-flight L1 observer")
         self.assertTrue(all(1 - 2 * (c.orientation.x ** 2 + c.orientation.y ** 2) > 0
                             for c in self.commands), "never publish an inverted target")
-        tilt_limit = rospy.get_param("/flygripper/robot_parameter/tilt_angle_max")
+        tilt_limit = math.radians(rospy.get_param("/flygripper/robot_parameter/tilt_angle_max_deg"))
         self.assertTrue(all(1 - 2 * (c.orientation.x ** 2 + c.orientation.y ** 2) >=
                             math.cos(tilt_limit) - 1e-9 for c in self.commands),
                         "every transmitted FCU target respects the configured tilt limit")
@@ -334,6 +499,23 @@ class AutoTakeoffTest(unittest.TestCase):
         self.imu_roll = math.radians(60)  # Upright, but above the configured 30 degrees.
         self.assert_upright_fallback_during_takeover()
         self.assertIn("tilt limit exceeded", self.runtime_values()["last_handover_reason"])
+
+    def test_tilt_limit_degree_dynamic_reconfigure(self):
+        self.follow = False
+        self.start_node()
+        client = Client("/flygripper/robot_parameter", timeout=5)
+        self.assertAlmostEqual(client.get_configuration()["tilt_angle_max_deg"], 30.0)
+        client.update_configuration({"tilt_angle_max_deg": 45.0})
+        self.trigger()
+        self.wait_for(lambda: len(self.commands) > 30, "takeoff control")
+        self.imu_roll = math.radians(40)
+        self.wait_for(lambda: any(1 - 2 * (c.orientation.x ** 2 + c.orientation.y ** 2)
+                                  < math.cos(math.radians(35)) for c in self.commands),
+                      "40-degree target allowed by 45-degree limit")
+        self.assertEqual("GUIDED_NOGPS", self.mode)
+        client.update_configuration({"tilt_angle_max_deg": 30.0})
+        self.wait_for(lambda: "ALT_HOLD" in self.mode_requests,
+                      "30-degree limit triggers takeover for 40-degree target")
 
     def test_wrong_thrust_semantics_rejected(self):
         self.guid_options = 0
@@ -489,6 +671,48 @@ class AutoTakeoffTest(unittest.TestCase):
     def runtime_values(self):
         return dict((v.key, v.value) for v in self.runtime[-1].status[0].values)
 
+    def test_input_timing_reports_each_stage(self):
+        self.start_node()
+        self.wait_for(lambda: self.runtime and
+                      float(self.runtime_values().get("rc_callbacks", 0)) > 5,
+                      "segmented input timing published")
+        values = self.runtime_values()
+        for name in ("imu", "odom", "rc", "fc"):
+            with self.subTest(input=name):
+                v = lambda suffix: float(values[name + "_" + suffix])
+                self.assertGreater(v("accepted_updates"), 0)
+                self.assertEqual(v("rejected_updates"), 0)
+                self.assertGreater(v("receipt_ros_s"), 0)
+                self.assertAlmostEqual((v("callback_ros_s") - v("receipt_ros_s")) * 1000,
+                                       v("queue_delay_ms"), delta=0.003)
+                self.assertGreaterEqual(v("lock_acquired_steady_s"), v("callback_steady_s"))
+                self.assertGreaterEqual(v("saved_steady_s"), v("lock_acquired_steady_s"))
+                self.assertAlmostEqual((v("saved_steady_s") - v("lock_acquired_steady_s")) * 1000,
+                                       v("store_ms"), delta=0.003)
+                for stage in ("queue_delay", "lock_wait", "store"):
+                    self.assertGreaterEqual(v(stage + "_max_ms"), v(stage + "_ms"))
+        self.assertAlmostEqual(float(values["input_snapshot_ms"]),
+                               float(values["input_lock_copy_ms"]) + float(values["input_decode_ms"]),
+                               delta=0.003)
+
+    def test_short_ch5_release_is_not_overwritten_by_high(self):
+        self.start_node()
+        self.trigger()
+        self.wait_ascent()
+        self.publish_rc = False
+        time.sleep(0.03)  # Drain any publisher iteration already in progress.
+        for ch5 in (1000, 2000):
+            rc = RCIn(channels=[1500, 1500, 1000, 1500, ch5, 1000,
+                                1000, 1000, 1500, 1000])
+            rc.header.stamp = rospy.Time.now()
+            self.pubs["rc"].publish(rc)
+        self.publish_rc = True  # Continue with CH5 high, after the brief release.
+        self.wait_for(lambda: self.mode == "ALT_HOLD", "brief CH5 release triggers handover")
+        self.wait_for(lambda: self.runtime and
+                      "CH5 released" in self.runtime_values()["last_handover_reason"],
+                      "handover caused by retained RC edge")
+        self.assert_stopped()
+
     def test_slow_mode_service_does_not_block_inputs_or_control(self):
         self.start_node()
         self.trigger()
@@ -566,6 +790,21 @@ class AutoTakeoffTest(unittest.TestCase):
             subscriber.unregister()
         for publisher in self.pubs.values():
             publisher.unregister()
+        artifact_root = os.environ.get("HIARM_TEST_ARTIFACTS")
+        if artifact_root:
+            os.makedirs(artifact_root, exist_ok=True)
+            prefix = os.path.join(artifact_root, self._testMethodName)
+            self.log.flush()
+            self.log.seek(0)
+            with open(prefix + ".log", "w") as output:
+                output.write(self.log.read())
+            with open(prefix + ".json", "w") as output:
+                json.dump({
+                    "mock_publish_ros_s": self.publish_times,
+                    "runtime": [{"stamp": msg.header.stamp.to_sec(),
+                                 "values": {v.key: v.value for v in msg.status[0].values}}
+                                for msg in self.runtime if msg.status],
+                }, output)
         self.log.close()
         self.directory.cleanup()
 

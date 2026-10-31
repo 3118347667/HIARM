@@ -9,6 +9,46 @@
 #include "mavros_msgs/ParamGet.h"
 
 namespace flygripper_flight {
+namespace {
+template<class Message>
+ros::SubscribeOptions inputOptions(
+    const std::string& topic, uint32_t capacity,
+    void (Fsm::*callback)(const ros::MessageEvent<const Message>&),
+    Fsm* fsm, ros::CallbackQueue* queue) {
+  ros::SubscribeOptions options;
+  options.initByFullCallbackType<const ros::MessageEvent<const Message>&>(
+      topic, capacity, [fsm, callback](const ros::MessageEvent<const Message>& event) {
+        (fsm->*callback)(event);
+      });
+  options.callback_queue = queue;
+  options.allow_concurrent_callbacks = false;
+  options.transport_hints = ros::TransportHints().tcpNoDelay();
+  return options;
+}
+
+bool validTrajectoryMessage(const flygripper_msgs::PolynomialTrajectory& message) {
+  if (message.xyz_pieces.empty() || message.id > static_cast<uint32_t>(INT32_MAX)) return false;
+  const auto order = message.xyz_pieces.front().order;
+  if (order != 5 && order != 7) return false;
+  const auto valid_piece = [](const auto& piece, uint32_t dim, uint32_t degree) {
+    return piece.dim == dim && piece.order == degree &&
+        piece.coeff.size() == dim * (degree + 1) &&
+        std::isfinite(piece.duration) && piece.duration > 0.0 &&
+        std::all_of(piece.coeff.begin(), piece.coeff.end(),
+                    [](double value) { return std::isfinite(value); });
+  };
+  for (const auto& piece : message.xyz_pieces)
+    if (!valid_piece(piece, 3, order)) return false;
+  if (message.heading_mode > flygripper_msgs::PolynomialTrajectory::HEADING_POLY) return false;
+  if (message.heading_mode == flygripper_msgs::PolynomialTrajectory::HEADING_POLY) {
+    if (message.heading_pieces.empty()) return false;
+    for (const auto& piece : message.heading_pieces)
+      if (!valid_piece(piece, 1, 3)) return false;
+  }
+  return true;
+}
+}  // namespace
+
 Fsm::Fsm(ros::NodeHandle &nh, ros::NodeHandle &pnh) {
   //! fsm parameter
   if (!fsm_param_config_.init(pnh)) {
@@ -96,9 +136,8 @@ Fsm::Fsm(ros::NodeHandle &nh, ros::NodeHandle &pnh) {
         }
         return success;
       });
-  input_spinner_ = std::make_unique<ros::AsyncSpinner>(1, &update_queue_);
   control_spinner_ = std::make_unique<ros::AsyncSpinner>(1, &control_queue_);
-  input_spinner_->start();
+  input_queues_.start();
   ros::NodeHandle control_nh(nh);
   control_nh.setCallbackQueue(&control_queue_);
   loop_timer_ = control_nh.createTimer(ros::Duration(1.0 / fsm_param_->loop_frequency),
@@ -109,7 +148,7 @@ Fsm::Fsm(ros::NodeHandle &nh, ros::NodeHandle &pnh) {
 Fsm::~Fsm() {
   loop_timer_.stop();
   if (control_spinner_) control_spinner_->stop();
-  if (input_spinner_) input_spinner_->stop();
+  input_queues_.stop();
   // Shutdown clients before joining; ROS shutdown also tears down service links.
   mavros_setmode_srv_.shutdown();
   mavros_getparam_srv_.shutdown();
@@ -160,65 +199,43 @@ void Fsm::publishZeroCommand() {
 }
 
 void Fsm::rosSetup(ros::NodeHandle &nh) {
-  //! rc from mavros
-  rc_options_ = ros::SubscribeOptions::create<mavros_msgs::RCIn>(
-      "/mavros/rc/in", 10, boost::bind(&Fsm::rosRcCallback, this, _1),
-      ros::VoidConstPtr(), &update_queue_);
-  rc_options_.transport_hints = ros::TransportHints().tcpNoDelay();
+  using Channel = InputCallbackQueues::Channel;
+  rc_options_ = inputOptions<mavros_msgs::RCIn>(
+      "/mavros/rc/in", 10, &Fsm::rosRcCallback, this, input_queues_.get(Channel::Safety));
   rc_sub_ = nh.subscribe(rc_options_);
-  //! fc_state from mavros
-  fc_state_options_ = ros::SubscribeOptions::create<mavros_msgs::State>(
-      "/mavros/state", 10, boost::bind(&Fsm::rosFcStateCallback, this, _1),
-      ros::VoidConstPtr(), &update_queue_);
-  fc_state_options_.transport_hints = ros::TransportHints().tcpNoDelay();
+  fc_state_options_ = inputOptions<mavros_msgs::State>(
+      "/mavros/state", 10, &Fsm::rosFcStateCallback, this, input_queues_.get(Channel::Safety));
   fc_state_sub_ = nh.subscribe(fc_state_options_);
-  extended_state_options_ = ros::SubscribeOptions::create<mavros_msgs::ExtendedState>(
-      "/mavros/extended_state", 10,
-      boost::bind(&Fsm::rosExtendedStateCallback, this, _1),
-      ros::VoidConstPtr(), &update_queue_);
+  extended_state_options_ = inputOptions<mavros_msgs::ExtendedState>(
+      "/mavros/extended_state", 10, &Fsm::rosExtendedStateCallback, this,
+      input_queues_.get(Channel::Safety));
   extended_state_sub_ = nh.subscribe(extended_state_options_);
-  //! odom
-  odom_options_ = ros::SubscribeOptions::create<nav_msgs::Odometry>(
-      "odom", 2, boost::bind(&Fsm::rosOdomCallback, this, _1),
-      ros::VoidConstPtr(), &update_queue_);
-  odom_options_.transport_hints = ros::TransportHints().tcpNoDelay();
+  odom_options_ = inputOptions<nav_msgs::Odometry>(
+      "odom", 2, &Fsm::rosOdomCallback, this, input_queues_.get(Channel::Odom));
   odom_sub_ = nh.subscribe(odom_options_);
-  //! imu
-  imu_options_ = ros::SubscribeOptions::create<sensor_msgs::Imu>(
-      "imu", 2, boost::bind(&Fsm::rosImuCallback, this, _1),
-      ros::VoidConstPtr(), &update_queue_);
-  imu_options_.transport_hints = ros::TransportHints().tcpNoDelay();
+  imu_options_ = inputOptions<sensor_msgs::Imu>(
+      "imu", 2, &Fsm::rosImuCallback, this, input_queues_.get(Channel::Imu));
   imu_sub_ = nh.subscribe(imu_options_);
-  //! actuator_state
-  actuator_state_options_ =
-      ros::SubscribeOptions::create<flygripper_msgs::ActuatorState>(
-          "actuator_state", 10,
-          boost::bind(&Fsm::rosActuatorStateCallback, this, _1),
-          ros::VoidConstPtr(), &update_queue_);
-  actuator_state_options_.transport_hints = ros::TransportHints().tcpNoDelay();
+  actuator_state_options_ = inputOptions<flygripper_msgs::ActuatorState>(
+      "actuator_state", 10, &Fsm::rosActuatorStateCallback, this,
+      input_queues_.get(Channel::Ordinary));
   actuator_state_sub_ = nh.subscribe(actuator_state_options_);
-  //! battery from mavros
-  battery_options_ = ros::SubscribeOptions::create<sensor_msgs::BatteryState>(
-      "/mavros/battery", 10, boost::bind(&Fsm::rosBatteryCallback, this, _1),
-      ros::VoidConstPtr(), &update_queue_);
-  battery_options_.transport_hints = ros::TransportHints().tcpNoDelay();
+  battery_options_ = inputOptions<sensor_msgs::BatteryState>(
+      "/mavros/battery", 10, &Fsm::rosBatteryCallback, this,
+      input_queues_.get(Channel::Ordinary));
   battery_sub_ = nh.subscribe(battery_options_);
-  //! rotor_speed from mavros
-  rotor_speed_options_ =
-      ros::SubscribeOptions::create<mavros_msgs::ESCTelemetry>(
-          "rotor_speed", 10, boost::bind(&Fsm::rosRotorSpeedCallback, this, _1),
-          ros::VoidConstPtr(), &update_queue_);
-  rotor_speed_options_.transport_hints = ros::TransportHints().tcpNoDelay();
+  rotor_speed_options_ = inputOptions<mavros_msgs::ESCTelemetry>(
+      "rotor_speed", 10, &Fsm::rosRotorSpeedCallback, this,
+      input_queues_.get(Channel::Ordinary));
   rotor_speed_sub_ = nh.subscribe(rotor_speed_options_);
-  //! trajectory
-  traj_options_ =
-      ros::SubscribeOptions::create<flygripper_msgs::PolynomialTrajectory>(
-          "trajectory", 10, boost::bind(&Fsm::rosTrajCallback, this, _1),
-          ros::VoidConstPtr(), &update_queue_);
-  traj_options_.transport_hints = ros::TransportHints().tcpNoDelay();
+  traj_options_ = inputOptions<flygripper_msgs::PolynomialTrajectory>(
+      "trajectory", 10, &Fsm::rosTrajCallback, this,
+      input_queues_.get(Channel::Ordinary));
   traj_sub_ = nh.subscribe(traj_options_);
 
   runtime_diagnostic_pub_ = nh.advertise<diagnostic_msgs::DiagnosticArray>("runtime_diagnostics", 10);
+  flight_trajectory_status_pub_ = nh.advertise<flygripper_msgs::FlightTrajectoryStatus>(
+      "flight_trajectory_status", 1, false);
 
   // robot command
   rotor_command_pub_ =
@@ -248,68 +265,69 @@ void Fsm::rosSetup(ros::NodeHandle &nh) {
 
 }
 
-void Fsm::rosOdomCallback(nav_msgs::OdometryConstPtr msg) {
-  std::lock_guard<std::mutex> lock(input_mutex_);
-  received_.odom.store(msg);
+void Fsm::rosOdomCallback(const ros::MessageEvent<const nav_msgs::Odometry>& event) {
+  odom_input_.receive(event);
 }
 
-void Fsm::rosImuCallback(sensor_msgs::ImuConstPtr msg) {
-  std::lock_guard<std::mutex> lock(input_mutex_);
-  received_.imu.store(msg);
+void Fsm::rosImuCallback(const ros::MessageEvent<const sensor_msgs::Imu>& event) {
+  imu_input_.receive(event);
 }
 
-void Fsm::rosActuatorStateCallback(flygripper_msgs::ActuatorStateConstPtr msg) {
-  std::lock_guard<std::mutex> lock(input_mutex_);
-  received_.actuator.store(msg);
+void Fsm::rosActuatorStateCallback(const ros::MessageEvent<const flygripper_msgs::ActuatorState>& event) {
+  actuator_input_.receive(event);
 }
 
-void Fsm::rosBatteryCallback(sensor_msgs::BatteryStateConstPtr msg) {
-  std::lock_guard<std::mutex> lock(input_mutex_);
-  received_.battery.store(msg);
+void Fsm::rosBatteryCallback(const ros::MessageEvent<const sensor_msgs::BatteryState>& event) {
+  battery_input_.receive(event);
 }
 
-void Fsm::rosRotorSpeedCallback(mavros_msgs::ESCTelemetryConstPtr msg) {
-  std::lock_guard<std::mutex> lock(input_mutex_);
-  received_.rotor.store(msg);
+void Fsm::rosRotorSpeedCallback(const ros::MessageEvent<const mavros_msgs::ESCTelemetry>& event) {
+  rotor_input_.receive(event);
 }
 
-void Fsm::rosRcCallback(mavros_msgs::RCInConstPtr msg) {
-  std::lock_guard<std::mutex> lock(input_mutex_);
-  received_.rc.store(msg);
-  if (rc_events_.size() >= 64) { rc_events_.pop_front(); rc_overflow_ = true; }
-  rc_events_.push_back(received_.rc);
+void Fsm::rosRcCallback(const ros::MessageEvent<const mavros_msgs::RCIn>& event) {
+  rc_input_buffer_.receive(event);
 }
 
-void Fsm::rosFcStateCallback(mavros_msgs::StateConstPtr msg) {
-  std::lock_guard<std::mutex> lock(input_mutex_);
-  received_.fc.store(msg);
+void Fsm::rosFcStateCallback(const ros::MessageEvent<const mavros_msgs::State>& event) {
+  fc_input_.receive(event);
 }
 
-void Fsm::rosExtendedStateCallback(mavros_msgs::ExtendedStateConstPtr msg) {
-  std::lock_guard<std::mutex> lock(input_mutex_);
-  received_.extended.store(msg);
+void Fsm::rosExtendedStateCallback(const ros::MessageEvent<const mavros_msgs::ExtendedState>& event) {
+  extended_input_.receive(event);
 }
 
-void Fsm::rosTrajCallback(flygripper_msgs::PolynomialTrajectoryConstPtr msg) {
-  std::lock_guard<std::mutex> lock(input_mutex_);
-  received_.trajectory.store(msg);
+void Fsm::rosTrajCallback(const ros::MessageEvent<const flygripper_msgs::PolynomialTrajectory>& event) {
+  trajectory_input_.receive(event);
 }
 
 void Fsm::consumeInputs() {
   const double started = steadySeconds();
-  Inputs input;
-  std::deque<InputSlot<mavros_msgs::RCIn>> rc_events;
-  bool overflow;
-  {
-    std::lock_guard<std::mutex> lock(input_mutex_);
-    input = received_;
-    rc_events.swap(rc_events_);
-    overflow = rc_overflow_;
-    rc_overflow_ = false;
-  }
-  rc_snapshot_overflow_ = overflow;
-  rc_release_seen_ = overflow;
-  for (const auto& event : rc_events) {
+  Inputs input = applied_;
+  // Release each topic lock before taking another. Parsing, logging and old
+  // message destruction are outside the buffers; no nested locks are needed.
+  const auto rc_events = rc_input_buffer_.tryDrain();
+  if (rc_events) input.rc = rc_events->latest;
+  else ++input_snapshot_misses_;
+  const auto copy = [this](auto& destination, const auto& source) {
+    auto snapshot = source.trySnapshot();
+    if (snapshot) destination = std::move(*snapshot);
+    else ++input_snapshot_misses_;
+  };
+  copy(input.fc, fc_input_);
+  copy(input.extended, extended_input_);
+  copy(input.imu, imu_input_);
+  copy(input.odom, odom_input_);
+  copy(input.battery, battery_input_);
+  copy(input.rotor, rotor_input_);
+  copy(input.actuator, actuator_input_);
+  copy(input.trajectory, trajectory_input_);
+  const double copied = steadySeconds();
+  input_lock_copy_duration_ = copied - started;
+  rc_snapshot_overflow_ = rc_events && rc_events->overflow;
+  rc_release_seen_ = rc_snapshot_overflow_;
+  for (size_t i = 0; rc_events && i < rc_events->size; ++i) {
+    const auto& event = rc_events->events[i];
     fromRosMsg(event.message, rc_input_, true);
     rc_input_.stamp = event.received_ros;
     rc_input_.update();
@@ -339,7 +357,31 @@ void Fsm::consumeInputs() {
     rotor_speed_.stamp = input.rotor.received_ros;
   }
   if (input.trajectory.message && input.trajectory.count != applied_.trajectory.count) {
-    fromRosMsg(input.trajectory.message, trajectory_);
+    // Decode into a fresh object: failed decoding must not acknowledge the
+    // previous trajectory under a newly received message's identity.
+    Trajectory decoded;
+    if (validTrajectoryMessage(*input.trajectory.message))
+      fromRosMsg(input.trajectory.message, decoded);
+    else
+      ROS_ERROR_THROTTLE(1.0, "Rejected malformed trajectory message");
+    if (decoded.valid()) {
+      pending_trajectory_ = decoded;
+      pending_trajectory_message_ = input.trajectory.message;
+    } else {
+      trajectory_message_decoded_ = false;
+      trajectory_ = Trajectory();
+      active_trajectory_message_.reset();
+      pending_trajectory_message_.reset();
+    }
+  }
+  // A replanned trajectory can start slightly in the future. Continue the
+  // current trajectory until its successor starts, rather than briefly
+  // reporting a hover on every normal replan.
+  if (pending_trajectory_message_ && now_ >= pending_trajectory_.stamp) {
+    trajectory_ = pending_trajectory_;
+    active_trajectory_message_ = pending_trajectory_message_;
+    pending_trajectory_message_.reset();
+    trajectory_message_decoded_ = true;
   }
   if (input.extended.message) {
     extended_state_ = *input.extended.message;
@@ -352,9 +394,12 @@ void Fsm::consumeInputs() {
   imu_callback_gap_ = input.imu.count ? now - input.imu.received_steady : -1.0;
   odom_callback_gap_ = input.odom.count ? now - input.odom.received_steady : -1.0;
   input_copy_duration_ = now - started;
+  input_decode_duration_ = now - copied;
 }
 
 void Fsm::controlLoop(const ros::TimerEvent &event) {
+  trajectory_sampled_this_cycle_ = false;
+  trajectory_control_published_this_cycle_ = false;
   compute_duration_ = 0.0;
   loop_started_ = steadySeconds();
   loop_period_ = last_loop_started_ > 0.0 ? loop_started_ - last_loop_started_ : 0.0;
@@ -363,6 +408,7 @@ void Fsm::controlLoop(const ros::TimerEvent &event) {
   ScopeExit finish([this] {
     control_duration_ = steadySeconds() - loop_started_;
     max_control_duration_ = std::max(max_control_duration_, control_duration_);
+    publishFlightTrajectoryStatus();
     publishRuntimeDiagnostics();
   });
   checkCycleTime(1.0 / fsm_param_->loop_frequency,
@@ -476,7 +522,7 @@ void Fsm::controlLoop(const ros::TimerEvent &event) {
 
     //! [ROS] Publish controller staff
     if (!robot_command_.valid()) {
-      ROS_ERROR_STREAM("Rotor command is not valid! \n" << robot_command_);
+      ROS_ERROR_STREAM_THROTTLE(1.0, "Rotor command is not valid! \n" << robot_command_);
     } else {
       // [ROS] First publish rotor commands
       if (robot_command_.rotor_mode == RobotCommandMode::MODE_SINGLE_ROTOR) {
@@ -487,6 +533,7 @@ void Fsm::controlLoop(const ros::TimerEvent &event) {
 
         toRosMsg(robot_command_, rotor_command_msg_);
         rotor_command_pub_.publish(rotor_command_msg_);
+        trajectory_control_published_this_cycle_ = true;
       }
       //      else if (robot_command_.rotor_mode ==
       //      RobotCommandMode::MODE_BODY_RATE_CUSTOMIZED){
@@ -539,8 +586,9 @@ void Fsm::controlLoop(const ros::TimerEvent &event) {
             std::clamp(robot_command_.collective_thrust_command, 0.0, 1.0);
         toRosMsg(robot_command_, thrust_att_command_msg_);
         thrust_att_command_pub_.publish(thrust_att_command_msg_);
+        trajectory_control_published_this_cycle_ = true;
       } else {
-        ROS_WARN("other mode is not implemented.");
+        ROS_WARN_THROTTLE(1.0, "other mode is not implemented.");
       }
 
       // [ROS] Publish robot_state
@@ -605,7 +653,7 @@ bool Fsm::updateRobotState() {
   } else if (!imu_.valid()) {
     ret = false;
     fault_reason_ += "IMU invalid; ";
-    ROS_WARN("IMU data invalid!");
+    ROS_WARN_THROTTLE(1.0, "IMU data invalid!");
   }
 
   if (!std::isfinite(odom_.stamp) || now_ - odom_.stamp > fsm_param_->odom_timeout ||
@@ -621,7 +669,7 @@ bool Fsm::updateRobotState() {
   } else if (!odom_.valid()) {
     ret = false;
     fault_reason_ += "EKF odometry invalid; ";
-    ROS_WARN("Odometry data invalid!");
+    ROS_WARN_THROTTLE(1.0, "Odometry data invalid!");
   }
   const bool quaternion_valid = std::abs(imu_.att.norm() - 1.0) < 0.05 &&
                                 std::abs(odom_.att.norm() - 1.0) < 0.05;
@@ -693,7 +741,7 @@ bool Fsm::updateRobotState() {
     //ret = false;
   } else if (!battery_.valid()) {
     //ret = false;
-    ROS_WARN("Battery data invalid!");
+    ROS_WARN_THROTTLE(1.0, "Battery data invalid!");
   }
   if (!fcStateFresh()) fault_reason_ += "FCU state stale/disconnected; ";
   ret &= fcStateFresh();
@@ -798,6 +846,13 @@ void Fsm::updateFsmStateAndReference() {
         break;
       }
       //! [STATE] GUIDED => TRAJ by rc
+      // Do not reuse a trajectory received in a previous trajectory session.
+      // consumeInputs() has already recorded its sequence in applied_.
+      trajectory_ = Trajectory();
+      pending_trajectory_message_.reset();
+      active_trajectory_message_.reset();
+      trajectory_message_decoded_ = false;
+      awaiting_first_trajectory_ = true;
       setFsmState(FsmState::STATE_TRAJ);
       if (fsm_param_->traj_trigger) {
         publishTrajTrigger();
@@ -917,6 +972,39 @@ void Fsm::updateFsmStateAndReference() {
     //----------------------------------------
     if (trajectory_.isReceived(now_) && trajectory_.valid() &&
         trajectory_.available(now_)) {
+      if (awaiting_first_trajectory_) {
+        const double t = now_ - trajectory_.getStartTime();
+        const Vector<3> p = trajectory_.xyz_mode == Trajectory::XYZMode::XYZ_MIN_JERK
+            ? trajectory_.xyz_min_jerk_poly.getPos(t)
+            : trajectory_.xyz_min_snap_poly.getPos(t);
+        const Vector<3> v = trajectory_.xyz_mode == Trajectory::XYZMode::XYZ_MIN_JERK
+            ? trajectory_.xyz_min_jerk_poly.getVel(t)
+            : trajectory_.xyz_min_snap_poly.getVel(t);
+        bool heading_discontinuous = false;
+        if (trajectory_.heading_mode == Trajectory::HeadingMode::HEADING_POLY) {
+          const auto yawOf = [](const Vector<4>& a) {
+            const Quaternion q(a[3], a[0], a[1], a[2]);
+            const Vector<3> forward = q.normalized() * Vector<3>::UnitX();
+            return std::atan2(forward.y(), forward.x());
+          };
+          const double yaw = trajectory_.heading_poly.getPos(t)[0];
+          heading_discontinuous =
+              std::abs(std::remainder(yaw - yawOf(robot_state_.att), 2.0 * M_PI)) > M_PI / 6.0 ||
+              std::abs(std::remainder(yaw - yawOf(references_.front().state.att), 2.0 * M_PI)) > M_PI / 6.0;
+        }
+        // Old missions may still publish freshly stamped hold trajectories
+        // before their trigger callback runs. Reject those as well as cached
+        // messages; do not jump away from either the vehicle or its reference.
+        if ((p - robot_state_.pos).norm() > 0.15 ||
+            (p - references_.front().state.pos).norm() > 0.15 ||
+            (v - robot_state_.vel).norm() > 0.30 || heading_discontinuous) {
+          ROS_WARN_THROTTLE(1.0, "Rejecting first trajectory: position, velocity or heading differs from the current vehicle/reference");
+          trajectory_ = Trajectory();
+          active_trajectory_message_.reset();
+          trajectory_message_decoded_ = false;
+          break;
+        }
+      }
       //! [TYPE] ANY => TRAJ
       if (ref_type_ != ReferenceType::TYPE_TRAJ) {
         setReferenceType(ReferenceType::TYPE_TRAJ);
@@ -932,7 +1020,10 @@ void Fsm::updateFsmStateAndReference() {
         //!       i.e. tracking error is too large //TODO: better to have
         sampler_->getHoverReference(robot_state_, references_, now_,
                                     robot_command_.rotor_mode, true);
-      };
+      } else {
+        trajectory_sampled_this_cycle_ = true;
+        awaiting_first_trajectory_ = false;
+      }
     } else if (ref_type_ == ReferenceType::TYPE_TRAJ) {
       //! [TYPE] TRAJ => HOVER
       setReferenceType(ReferenceType::TYPE_HOVER);
@@ -1080,6 +1171,47 @@ bool Fsm::fcStateFresh() const {
          now_ - fc_state_.stamp <= fsm_param_->fc_state_timeout;
 }
 
+void Fsm::publishFlightTrajectoryStatus() {
+  flygripper_msgs::FlightTrajectoryStatus status;
+  status.header.stamp = ros::Time::now();
+  const double publish_time = status.header.stamp.toSec();
+  status.fcu_state_fresh = std::isfinite(fc_state_.stamp) && fc_state_.connected &&
+      publish_time >= fc_state_.stamp &&
+      publish_time - fc_state_.stamp <= fsm_param_->fc_state_timeout;
+  status.fcu_armed = fc_state_.armed;
+  status.fcu_guided_nogps = fc_state_.mode == "GUIDED_NOGPS";
+  status.fsm_state = static_cast<uint8_t>(fsm_state_);
+  status.reference_type = static_cast<uint8_t>(ref_type_);
+  const auto& message = active_trajectory_message_;
+  if (message) {
+    status.trajectory_id = message->id;
+    status.trajectory_start = message->header.stamp;
+  }
+  status.trajectory_active = message && trajectory_message_decoded_ &&
+      trajectory_.id >= 0 && static_cast<uint32_t>(trajectory_.id) == message->id &&
+      trajectory_.stamp == message->header.stamp.toSec() &&
+      publish_time >= trajectory_.stamp &&
+      publish_time <= trajectory_.stamp + trajectory_.duration &&
+      status.fcu_state_fresh && status.fcu_armed && status.fcu_guided_nogps &&
+      guided_entry_verified_ && !attitude_safety_handover_ &&
+      fsm_state_ == FsmState::STATE_TRAJ && ref_type_ == ReferenceType::TYPE_TRAJ &&
+      trajectory_sampled_this_cycle_ && trajectory_control_published_this_cycle_;
+
+  const double steady_now = steadySeconds();
+  const bool changed = !flight_status_initialized_ ||
+      status.trajectory_active != last_flight_status_active_ ||
+      (status.trajectory_active &&
+       (status.trajectory_id != last_flight_status_id_ ||
+        status.trajectory_start != last_flight_status_start_));
+  if (!changed && steady_now - last_flight_status_publish_ < 0.05) return;
+  flight_trajectory_status_pub_.publish(status);
+  flight_status_initialized_ = true;
+  last_flight_status_active_ = status.trajectory_active;
+  last_flight_status_id_ = status.trajectory_id;
+  last_flight_status_start_ = status.trajectory_start;
+  last_flight_status_publish_ = steady_now;
+}
+
 bool Fsm::requestFcMode(const std::string& mode) {
   return mode_worker_->request(mode, mode == "GUIDED_NOGPS" &&
       robot_command_.rotor_mode == RobotCommandMode::MODE_ATTITUDE);
@@ -1221,34 +1353,56 @@ void Fsm::publishRuntimeDiagnostics() {
   };
   add("imu_header_age_ms", (now_ - imu_.stamp) * 1000.0);
   add("odom_header_age_ms", (now_ - odom_.stamp) * 1000.0);
-  // Age when stored after acquiring input_mutex_, including timestamp mapping errors.
+  // Preserve existing keys, now with callback entry measured before any lock.
   add("imu_age_at_callback_ms", applied_.imu.message
-      ? (applied_.imu.received_ros - applied_.imu.message->header.stamp.toSec()) * 1000.0 : -1.0);
+      ? (applied_.imu.timing.callback_ros - applied_.imu.message->header.stamp.toSec()) * 1000.0 : -1.0);
   add("odom_age_at_callback_ms", applied_.odom.message
-      ? (applied_.odom.received_ros - applied_.odom.message->header.stamp.toSec()) * 1000.0 : -1.0);
+      ? (applied_.odom.timing.callback_ros - applied_.odom.message->header.stamp.toSec()) * 1000.0 : -1.0);
   add("imu_callback_gap_ms", imu_callback_gap_ * 1000.0);
   add("odom_callback_gap_ms", odom_callback_gap_ * 1000.0);
-  add("imu_callback_max_gap_ms", applied_.imu.max_gap * 1000.0);
-  add("odom_callback_max_gap_ms", applied_.odom.max_gap * 1000.0);
-  // Also expose the live receive thread, independently of the control snapshot.
-  double live_imu, live_odom;
-  {
-    std::lock_guard<std::mutex> lock(input_mutex_);
-    const double sampled = steadySeconds();
-    live_imu = received_.imu.count ? (sampled - received_.imu.received_steady) * 1000.0 : -1.0;
-    live_odom = received_.odom.count ? (sampled - received_.odom.received_steady) * 1000.0 : -1.0;
-  }
-  add("imu_live_callback_gap_ms", live_imu);
-  add("odom_live_callback_gap_ms", live_odom);
-  add("imu_callbacks", applied_.imu.count);
-  add("odom_callbacks", applied_.odom.count);
-  add("imu_sequence_gaps", applied_.imu.sequence_gaps);
-  add("odom_sequence_gaps", applied_.odom.sequence_gaps);
+  // Sample the live buffers too: an old control snapshot must not be mistaken
+  // for a stopped input worker. All maxima below are since node startup.
+  const auto timing = [&add](const std::string& name, const auto& input) {
+    const auto& t = input.timing;
+    add(name + "_callbacks", input.callbacks);
+    add(name + "_accepted_updates", input.count);
+    add(name + "_rejected_updates", input.rejected_updates);
+    add(name + "_sequence_gaps", input.sequence_gaps);
+    add(name + "_live_callback_gap_ms", input.count
+        ? (steadySeconds() - input.received_steady) * 1000.0 : -1.0);
+    add(name + "_callback_max_gap_ms", input.max_gap * 1000.0);
+    add(name + "_receipt_ros_s", t.receipt_ros);
+    add(name + "_callback_ros_s", t.callback_ros);
+    add(name + "_callback_steady_s", t.callback_steady);
+    add(name + "_lock_acquired_steady_s", input.lock_acquired_steady);
+    add(name + "_saved_steady_s", input.saved_steady);
+    add(name + "_age_at_receipt_ms", input.message
+        ? (t.receipt_ros - input.message->header.stamp.toSec()) * 1000.0 : -1.0);
+    add(name + "_queue_delay_ms", input.queue_delay * 1000.0);
+    add(name + "_queue_delay_max_ms", input.max_queue_delay * 1000.0);
+    add(name + "_lock_wait_ms", input.lock_wait * 1000.0);
+    add(name + "_lock_wait_max_ms", input.max_lock_wait * 1000.0);
+    add(name + "_store_ms", input.store_duration * 1000.0);
+    add(name + "_store_max_ms", input.max_store_duration * 1000.0);
+  };
+  const auto live = [&add, &timing](const std::string& name, const auto& buffer, const auto& applied) {
+    const auto snapshot = buffer.trySnapshot();
+    add(name + "_live_snapshot_busy", !snapshot);
+    timing(name, snapshot ? *snapshot : applied);
+  };
+  live("imu", imu_input_, applied_.imu);
+  live("odom", odom_input_, applied_.odom);
+  live("rc", rc_input_buffer_, applied_.rc);
+  live("fc", fc_input_, applied_.fc);
+  live("trajectory", trajectory_input_, applied_.trajectory);
   add("imu_timeout_ms", fsm_param_->imu_timeout * 1000.0);
   add("odom_timeout_ms", fsm_param_->odom_timeout * 1000.0);
   add("control_period_ms", loop_period_ * 1000.0);
   add("control_period_max_ms", max_loop_period_ * 1000.0);
   add("input_snapshot_ms", input_copy_duration_ * 1000.0);
+  add("input_lock_copy_ms", input_lock_copy_duration_ * 1000.0);
+  add("input_decode_ms", input_decode_duration_ * 1000.0);
+  add("input_snapshot_misses", input_snapshot_misses_);
   add("parameter_refresh_ms", parameter_duration_ * 1000.0);
   add("control_compute_ms", compute_duration_ * 1000.0);
   add("control_work_ms", control_duration_ * 1000.0);

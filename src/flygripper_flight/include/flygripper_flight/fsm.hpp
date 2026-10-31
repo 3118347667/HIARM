@@ -1,10 +1,10 @@
 #pragma once
 #include <algorithm>
-#include <deque>
 #include <mutex>
 #include <diagnostic_msgs/DiagnosticArray.h>
 #include <ros/callback_queue.h>
 #include "flygripper_flight/runtime_io.hpp"
+#include "flygripper_flight/input_buffer.hpp"
 #include <ros/ros.h>
 #include <mavros_msgs/ExtendedState.h>
 
@@ -28,6 +28,7 @@
 #include "flygripper_flight/sampler.hpp"
 #include "flygripper_flight/thrust_acc_map.hpp"
 #include "flygripper_msgs/GraspState.h"
+#include "flygripper_msgs/FlightTrajectoryStatus.h"
 
 namespace flygripper_flight {
 using namespace flygripper_common;
@@ -44,22 +45,22 @@ class Fsm {
 
   void rosSetup(ros::NodeHandle& nh);
 
-  void rosOdomCallback(nav_msgs::OdometryConstPtr msg);
+  void rosOdomCallback(const ros::MessageEvent<const nav_msgs::Odometry>& event);
 
-  void rosImuCallback(sensor_msgs::ImuConstPtr msg);
+  void rosImuCallback(const ros::MessageEvent<const sensor_msgs::Imu>& event);
 
-  void rosActuatorStateCallback(flygripper_msgs::ActuatorStateConstPtr msg);
+  void rosActuatorStateCallback(const ros::MessageEvent<const flygripper_msgs::ActuatorState>& event);
 
-  void rosBatteryCallback(sensor_msgs::BatteryStateConstPtr msg);
+  void rosBatteryCallback(const ros::MessageEvent<const sensor_msgs::BatteryState>& event);
 
-  void rosRotorSpeedCallback(mavros_msgs::ESCTelemetryConstPtr msg);
+  void rosRotorSpeedCallback(const ros::MessageEvent<const mavros_msgs::ESCTelemetry>& event);
 
-  void rosRcCallback(mavros_msgs::RCInConstPtr msg);
+  void rosRcCallback(const ros::MessageEvent<const mavros_msgs::RCIn>& event);
 
-  void rosFcStateCallback(mavros_msgs::StateConstPtr msg);
-  void rosExtendedStateCallback(mavros_msgs::ExtendedStateConstPtr msg);
+  void rosFcStateCallback(const ros::MessageEvent<const mavros_msgs::State>& event);
+  void rosExtendedStateCallback(const ros::MessageEvent<const mavros_msgs::ExtendedState>& event);
 
-  void rosTrajCallback(flygripper_msgs::PolynomialTrajectoryConstPtr msg);
+  void rosTrajCallback(const ros::MessageEvent<const flygripper_msgs::PolynomialTrajectory>& event);
 
   void controlLoop(const ros::TimerEvent& event);
 
@@ -67,40 +68,31 @@ class Fsm {
   void updateParameter();
   void consumeInputs();
   void publishRuntimeDiagnostics();
-  template<class Message> struct InputSlot {
-    typename Message::ConstPtr message;
-    double received_ros{-1.0}, received_steady{-1.0}, max_gap{0.0};
-    uint64_t count{0}, sequence_gaps{0};
-    uint32_t last_sequence{0};
-    void store(typename Message::ConstPtr msg) {
-      const double now = steadySeconds();
-      if (count) {
-        max_gap = std::max(max_gap, now - received_steady);
-        const uint32_t delta = msg->header.seq - last_sequence;
-        if (delta > 1 && delta < 0x80000000u) sequence_gaps += delta - 1;
-      }
-      last_sequence = msg->header.seq;
-      message = msg;
-      received_ros = ros::Time::now().toSec();
-      received_steady = now;
-      ++count;
-    }
-  };
+  void publishFlightTrajectoryStatus();
   struct Inputs {
-    InputSlot<sensor_msgs::Imu> imu;
-    InputSlot<nav_msgs::Odometry> odom;
-    InputSlot<mavros_msgs::RCIn> rc;
-    InputSlot<mavros_msgs::State> fc;
-    InputSlot<mavros_msgs::ExtendedState> extended;
-    InputSlot<sensor_msgs::BatteryState> battery;
-    InputSlot<mavros_msgs::ESCTelemetry> rotor;
-    InputSlot<flygripper_msgs::ActuatorState> actuator;
-    InputSlot<flygripper_msgs::PolynomialTrajectory> trajectory;
+    InputSample<sensor_msgs::Imu> imu;
+    InputSample<nav_msgs::Odometry> odom;
+    InputSample<mavros_msgs::RCIn> rc;
+    InputSample<mavros_msgs::State> fc;
+    InputSample<mavros_msgs::ExtendedState> extended;
+    InputSample<sensor_msgs::BatteryState> battery;
+    InputSample<mavros_msgs::ESCTelemetry> rotor;
+    InputSample<flygripper_msgs::ActuatorState> actuator;
+    InputSample<flygripper_msgs::PolynomialTrajectory> trajectory;
   };
-  std::mutex input_mutex_;
-  Inputs received_, applied_;
-  std::deque<InputSlot<mavros_msgs::RCIn>> rc_events_;
-  bool rc_overflow_{false}, rc_release_seen_{false}, rc_snapshot_overflow_{false};
+  InputBuffer<sensor_msgs::Imu> imu_input_;
+  InputBuffer<nav_msgs::Odometry> odom_input_;
+  InputBuffer<mavros_msgs::RCIn, 64> rc_input_buffer_;
+  InputBuffer<mavros_msgs::State> fc_input_;
+  InputBuffer<mavros_msgs::ExtendedState> extended_input_;
+  InputBuffer<sensor_msgs::BatteryState> battery_input_;
+  InputBuffer<mavros_msgs::ESCTelemetry> rotor_input_;
+  InputBuffer<flygripper_msgs::ActuatorState> actuator_input_;
+  InputBuffer<flygripper_msgs::PolynomialTrajectory> trajectory_input_;
+  Inputs applied_;  // Only the control thread owns decoded state and this snapshot.
+  bool rc_release_seen_{false}, rc_snapshot_overflow_{false};
+  double input_lock_copy_duration_{0.0}, input_decode_duration_{0.0};
+  uint64_t input_snapshot_misses_{0};
   double loop_started_{0.0}, last_loop_started_{0.0};
   double loop_period_{0.0}, input_copy_duration_{0.0}, control_duration_{0.0};
   double last_diagnostic_{0.0}, max_loop_period_{0.0}, max_control_duration_{0.0};
@@ -109,6 +101,18 @@ class Fsm {
   bool handover_from_wait_{false};
   std::string guided_entry_mode_;
   bool guided_entry_verified_{false};
+  bool trajectory_sampled_this_cycle_{false};
+  bool trajectory_control_published_this_cycle_{false};
+  bool trajectory_message_decoded_{false};
+  bool awaiting_first_trajectory_{false};
+  flygripper_msgs::PolynomialTrajectoryConstPtr active_trajectory_message_;
+  flygripper_msgs::PolynomialTrajectoryConstPtr pending_trajectory_message_;
+  Trajectory pending_trajectory_;
+  bool flight_status_initialized_{false};
+  bool last_flight_status_active_{false};
+  uint32_t last_flight_status_id_{0};
+  ros::Time last_flight_status_start_;
+  double last_flight_status_publish_{0.0};
   uint64_t guided_entry_completed_baseline_{0};
 
   bool updateRobotState();
@@ -189,9 +193,9 @@ class Fsm {
   RobotParameterConfig robot_param_config_;
   RobotParameter::Ptr robot_param_;
 
-  ros::CallbackQueue update_queue_;
+  InputCallbackQueues input_queues_;
   ros::CallbackQueue control_queue_;
-  std::unique_ptr<ros::AsyncSpinner> input_spinner_, control_spinner_;
+  std::unique_ptr<ros::AsyncSpinner> control_spinner_;
   std::unique_ptr<ModeWorker> mode_worker_;
   ros::Timer loop_timer_;
   ros::Duration dt_;
@@ -203,7 +207,7 @@ class Fsm {
   ros::Publisher rotor_command_pub_, thrust_att_command_pub_,
       actuator_command_pub_, traj_trigger_pub_, ctrl_state_pub_, reference_pub_,
       robot_state_pub_, ext_indi_pub_, ext_l1_pub_, ext_tact_pub_,
-      interactive_wrench_pub_, runtime_diagnostic_pub_;
+      interactive_wrench_pub_, runtime_diagnostic_pub_, flight_trajectory_status_pub_;
   ros::ServiceClient mavros_setmode_srv_, mavros_getparam_srv_;
 
   //  flygripper_msgs::RotorCommand rotor_command_msg_;

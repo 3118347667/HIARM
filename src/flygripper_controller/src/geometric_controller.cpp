@@ -494,8 +494,7 @@ void GeometricController::getCommand(const RobotState& state,
   ;
 
   if (!command.valid()) {
-    ROS_INFO("-------------------------------------");
-    ROS_WARN_STREAM("Command is invalid!"
+    ROS_WARN_STREAM_THROTTLE(1.0, "Command is invalid!"
                     << command << "\n"
                     << "des_alpha: " << des_alpha.transpose() << "\n"
                     << "rot_pos: " << state.rot_pos.transpose());

@@ -8,7 +8,7 @@ robot_parameter:
   collective_thrust_min: 0.6072032  # ~ 10% gravity [N]
   collective_thrust_max: 18.216096 # ~ 300% gravity [N]
   torque_max: {x: 2.0, y: 2.0, z: 2.0}
-  tilt_angle_max: 1.0471975512  # rad 0.5235987756 for 30 degs, 1.0471975512 for 60 degs
+  tilt_angle_max_deg: 60.0  # degrees
   bodyrates_max: {x: 3.14, y: 3.14, z: 3.14} # 3.14 rad/s
 
   rotor_thrusts_min: [0.1518008, 0.1518008, 0.1518008, 0.1518008] # collective_thrust_min / 4 #

@@ -21,6 +21,7 @@ add_message_files(
         RotorVelocityFeedback.msg
         RobotState.msg
         PolynomialTrajectory.msg
+        FlightTrajectoryStatus.msg
         Polynomial.msg
         GeometricControllerData.msg
         TactSensor.msg

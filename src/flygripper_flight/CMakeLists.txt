@@ -15,18 +15,6 @@ find_package(catkin REQUIRED COMPONENTS
 find_package(Threads REQUIRED)
 find_package(Eigen3 REQUIRED)
 
-if(CATKIN_ENABLE_TESTING)
-  add_executable(test_runtime_io test/test_runtime_io.cpp)
-  target_include_directories(test_runtime_io PRIVATE include)
-  target_link_libraries(test_runtime_io ${CMAKE_THREAD_LIBS_INIT})
-  add_test(NAME runtime_io_contract COMMAND test_runtime_io)
-  add_executable(test_takeoff test/test_takeoff.cpp)
-  target_include_directories(test_takeoff PRIVATE include)
-  add_test(NAME takeoff_profile COMMAND test_takeoff)
-  find_package(rostest REQUIRED)
-  add_rostest(test/auto_takeoff.test)
-endif()
-
 generate_dynamic_reconfigure_options(
         cfg/RosFsmParameter.cfg
 )
@@ -37,6 +25,22 @@ include_directories(
         ${catkin_INCLUDE_DIRS}
         ${EIGEN3_INCLUDE_DIRS}
 )
+
+if(CATKIN_ENABLE_TESTING)
+  add_executable(test_runtime_io test/test_runtime_io.cpp)
+  target_include_directories(test_runtime_io PRIVATE include)
+  target_link_libraries(test_runtime_io ${CMAKE_THREAD_LIBS_INIT})
+  add_test(NAME runtime_io_contract COMMAND test_runtime_io)
+  add_executable(test_takeoff test/test_takeoff.cpp)
+  target_include_directories(test_takeoff PRIVATE include)
+  add_test(NAME takeoff_profile COMMAND test_takeoff)
+  find_package(rostest REQUIRED)
+  add_rostest_gtest(test_input_buffer test/input_buffer.test test/test_input_buffer.cpp)
+  target_include_directories(test_input_buffer PRIVATE include ${catkin_INCLUDE_DIRS})
+  target_link_libraries(test_input_buffer ${CMAKE_THREAD_LIBS_INIT} ${catkin_LIBRARIES})
+  add_dependencies(test_input_buffer ${catkin_EXPORTED_TARGETS})
+  add_rostest(test/auto_takeoff.test)
+endif()
 
 add_executable(${PROJECT_NAME}_node
         src/flygripper_flight_node.cpp

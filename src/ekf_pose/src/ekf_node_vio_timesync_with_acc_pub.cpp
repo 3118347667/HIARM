@@ -132,12 +132,12 @@ void seq_keep(const sensor_msgs::Imu::ConstPtr &imu_msg) {
 // choose the coordinate frame imu for the measurement
 bool search_proper_frame(double odom_time) {
   if (sys_seq.size() == 0) {
-    ROS_ERROR(
+    ROS_ERROR_THROTTLE(1.0,
         "sys_seq.size() == 0. if appear this error, should check the code");
     return false;
   }
   if (sys_seq.size() == 1) {
-    ROS_ERROR(
+    ROS_ERROR_THROTTLE(1.0,
         "sys_seq.size() == 0. if appear this error, should check the code");
     return false;
   }
@@ -398,7 +398,7 @@ void update_lastest_state() {
       sqrt(innovation(0) * innovation(0) + innovation(1) * innovation(1) +
            innovation(2) * innovation(2));
   if (pos_diff > POS_DIFF_THRESHOLD) {
-    ROS_ERROR(
+    ROS_ERROR_THROTTLE(1.0,
         "posintion diff too much between measurement and model prediction!!!   "
         "pos_diff setting: %f  but the diff measured is %f ",
         POS_DIFF_THRESHOLD, pos_diff);
@@ -441,14 +441,14 @@ void update_lastest_state() {
   odomtag_call = true;
 
   if (INNOVATION_(0) > 6 || INNOVATION_(1) > 6 || INNOVATION_(2) > 6)
-    cout << "\ninnovation: \n" << INNOVATION_ << endl;
+    ROS_WARN_STREAM_THROTTLE(1.0, "innovation: " << INNOVATION_.transpose());
   if (INNOVATION_(0) < -6 || INNOVATION_(1) < -6 || INNOVATION_(2) < -6)
-    cout << "\ninnovation: \n" << INNOVATION_ << endl;
+    ROS_WARN_STREAM_THROTTLE(1.0, "innovation: " << INNOVATION_.transpose());
   // monitor the position changing
   if ((innovation(0) > 1.5) || (innovation(1) > 1.5) || (innovation(2) > 1.5) ||
       (innovation(0) < -1.5) || (innovation(1) < -1.5) ||
       (innovation(2) < -1.5))
-    ROS_ERROR(
+    ROS_ERROR_THROTTLE(1.0,
         "posintion diff too much between measurement and model prediction!!!");
   if (cnt == 10 || cnt == 50 || cnt == 90) {
     // cout << "Ct: \n" << Ct << "\nWt:\n" << Wt << endl;
@@ -506,7 +506,7 @@ void vioodom_callback(
     double cos_theta =
         (R_odom * Eigen::Vector3d(0, 0, 1)).dot(Eigen::Vector3d(0, 0, -1));
     if (cos_theta > cos_theta_theshold) {
-      ROS_ERROR("flip over!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+      ROS_ERROR_THROTTLE(1.0, "flip over!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
     }
 
     // The short-IMU-buffer path below also updates the filter. Give it this
@@ -553,7 +553,7 @@ void vioodom_callback(
         sqrt(innovation(0) * innovation(0) + innovation(1) * innovation(1) +
              innovation(2) * innovation(2));
     if (pos_diff > POS_DIFF_THRESHOLD) {
-      ROS_ERROR(
+      ROS_ERROR_THROTTLE(1.0,
           "posintion diff too much between measurement and model prediction!!! "
           "  pos_diff setting: %f  but the diff measured is %f ",
           POS_DIFF_THRESHOLD, pos_diff);
@@ -595,14 +595,14 @@ void vioodom_callback(
     odomtag_call = true;
 
     if (INNOVATION_(0) > 6 || INNOVATION_(1) > 6 || INNOVATION_(2) > 6)
-      cout << "\ninnovation: \n" << INNOVATION_ << endl;
+      ROS_WARN_STREAM_THROTTLE(1.0, "innovation: " << INNOVATION_.transpose());
     if (INNOVATION_(0) < -6 || INNOVATION_(1) < -6 || INNOVATION_(2) < -6)
-      cout << "\ninnovation: \n" << INNOVATION_ << endl;
+      ROS_WARN_STREAM_THROTTLE(1.0, "innovation: " << INNOVATION_.transpose());
     // monitor the position changing
     if ((innovation(0) > 1.5) || (innovation(1) > 1.5) ||
         (innovation(2) > 1.5) || (innovation(0) < -1.5) ||
         (innovation(1) < -1.5) || (innovation(2) < -1.5))
-      ROS_ERROR("posintion diff too much between measurement and model "
+      ROS_ERROR_THROTTLE(1.0, "posintion diff too much between measurement and model "
                 "prediction!!!");
     if (cnt == 10 || cnt == 50 || cnt == 90) {
       // cout << "Ct: \n" << Ct << "\nWt:\n" << Wt << endl;
@@ -676,7 +676,7 @@ void vioodom_callback(
         sqrt(innovation(0) * innovation(0) + innovation(1) * innovation(1) +
              innovation(2) * innovation(2));
     if (pos_diff > POS_DIFF_THRESHOLD) {
-      ROS_ERROR(
+      ROS_ERROR_THROTTLE(1.0,
           "posintion diff too much between measurement and model prediction!!! "
           "  pos_diff setting: %f  but the diff measured is %f ",
           POS_DIFF_THRESHOLD, pos_diff);
