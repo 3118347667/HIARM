@@ -46,7 +46,7 @@ bool exe_traj(const quadrotor_msgs::PolyTraj &trajMsg) {
   if (t > 0) {
     if (trajMsg.hover) {
       if (trajMsg.hover_p.size() != 3) {
-        ROS_ERROR("[traj_server] hover_p is not 3d!");
+        ROS_ERROR_THROTTLE(1.0, "[traj_server] hover_p is not 3d!");
       }
       Eigen::Vector3d p, v0;
       p.x() = trajMsg.hover_p[0];
@@ -57,11 +57,11 @@ bool exe_traj(const quadrotor_msgs::PolyTraj &trajMsg) {
       return true;
     }
     if (trajMsg.order != 5) {
-      ROS_ERROR("[traj_server] Only support trajectory order equals 5 now!");
+      ROS_ERROR_THROTTLE(1.0, "[traj_server] Only support trajectory order equals 5 now!");
       return false;
     }
     if (trajMsg.duration.size() * (trajMsg.order + 1) != trajMsg.coef_x.size()) {
-      ROS_ERROR("[traj_server] WRONG trajectory parameters!");
+      ROS_ERROR_THROTTLE(1.0, "[traj_server] WRONG trajectory parameters!");
       return false;
     }
     int piece_nums = trajMsg.duration.size();
@@ -80,7 +80,7 @@ bool exe_traj(const quadrotor_msgs::PolyTraj &trajMsg) {
     }
     Trajectory traj(dura, cMats);
     if (t > traj.getTotalDuration()) {
-      ROS_ERROR("[traj_server] trajectory too short left!");
+      ROS_ERROR_THROTTLE(1.0, "[traj_server] trajectory too short left!");
       return false;
     }
     Eigen::Vector3d p, v, a;

@@ -54,4 +54,9 @@ add_executable(trigger_rc src/trigger_rc.cpp)
 target_link_libraries(trigger_rc ${catkin_LIBRARIES})
 add_dependencies(trigger_rc ${catkin_EXPORTED_TARGETS})
 
+if(CATKIN_ENABLE_TESTING)
+  add_executable(test_moving_grasp test/test_moving_grasp.cpp)
+  add_test(NAME moving_grasp COMMAND test_moving_grasp)
+endif()
+
 # The old occupancy-map test executable is not built in the mocap workspace.

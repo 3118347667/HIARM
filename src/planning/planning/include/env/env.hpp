@@ -459,7 +459,7 @@ public:
     // NOTE we should permit the start pos invalid! (for corridor generation)
     if (!curPtr->valid) {
       visited_nodes_.clear();
-      std::cout << "start postition invalid!" << std::endl;
+      ROS_WARN_THROTTLE(1.0, "start postition invalid!");
       return false;
     }
     curPtr->parent = nullptr;
@@ -469,8 +469,7 @@ public:
 
     double t_cost = (ros::Time::now() - t_start_).toSec();
     if (t_cost > MAX_DURATION) {
-      std::cout << "[env] search costs more than " << MAX_DURATION << "s!"
-                << std::endl;
+      ROS_WARN_STREAM_THROTTLE(1.0, "[env] search costs more than " << MAX_DURATION << "s!");
     }
     while (visited_nodes_.size() < MAX_MEMORY && t_cost <= MAX_DURATION) {
       for (const auto &neighbor : neighbors) {
@@ -501,7 +500,7 @@ public:
       } // for each neighbor
       if (open_set.empty()) {
         // std::cout << "start postition invalid!" << std::endl;
-        std::cout << "[env] no way!" << std::endl;
+        ROS_WARN_THROTTLE(1.0, "[env] no way!");
         break;
       }
       curPtr = open_set.top();
@@ -512,7 +511,7 @@ public:
         break;
       }
       if (visited_nodes_.size() == MAX_MEMORY) {
-        std::cout << "[env] out of memory!" << std::endl;
+        ROS_WARN_THROTTLE(1.0, "[env] out of memory!");
       }
     }
     if (ret) {
@@ -583,7 +582,7 @@ public:
     // NOTE we should permit the start pos invalid! (for corridor generation)
     if (!curPtr->valid) {
       visited_nodes_.clear();
-      std::cout << "start postition invalid!" << std::endl;
+      ROS_WARN_THROTTLE(1.0, "start postition invalid!");
       return false;
     }
     curPtr->parent = nullptr;
@@ -620,7 +619,7 @@ public:
       } // for each neighbor
       if (open_set.empty()) {
         // std::cout << "start postition invalid!" << std::endl;
-        std::cout << "[astar search] no way!" << std::endl;
+        ROS_WARN_THROTTLE(1.0, "[astar search] no way!");
         break;
       }
       curPtr = open_set.top();
@@ -631,7 +630,7 @@ public:
         break;
       }
       if (visited_nodes_.size() == MAX_MEMORY) {
-        std::cout << "[astar search] out of memory!" << std::endl;
+        ROS_WARN_THROTTLE(1.0, "[astar search] out of memory!");
       }
     }
     if (ret) {
@@ -676,7 +675,7 @@ public:
       target_Ang -= 2 * M_PI;
     // double target_Ang = std::atan2(target_yaw.y(), target_yaw.x()) - M_PI / 2
     // - M_PI / 4;
-    ROS_WARN("target_Ang: %f", target_Ang);
+    ROS_WARN_THROTTLE(1.0, "target_Ang: %f", target_Ang);
 
     double theta0 = atan2(dp.y(), dp.x());
     if (theta0 < 0)
@@ -910,7 +909,7 @@ public:
     // NOTE we should permit the start pos invalid! (for corridor generation)
     if (!curPtr->valid) {
       visited_nodes_.clear();
-      std::cout << "[short astar]start postition invalid!" << std::endl;
+      ROS_WARN_THROTTLE(1.0, "[short astar]start postition invalid!");
       return false;
     }
     curPtr->parent = nullptr;
@@ -947,7 +946,7 @@ public:
       } // for each neighbor
       if (open_set.empty()) {
         // std::cout << "start postition invalid!" << std::endl;
-        std::cout << "[short astar] no way!" << std::endl;
+        ROS_WARN_THROTTLE(1.0, "[short astar] no way!");
         break;
       }
       curPtr = open_set.top();
@@ -958,7 +957,7 @@ public:
         break;
       }
       if (visited_nodes_.size() == MAX_MEMORY) {
-        std::cout << "[short astar] out of memory!" << std::endl;
+        ROS_WARN_THROTTLE(1.0, "[short astar] out of memory!");
       }
     }
     if (ret) {

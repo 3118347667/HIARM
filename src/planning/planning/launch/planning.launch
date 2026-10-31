@@ -1,91 +1,220 @@
 <?xml version="1.0"?>
 <launch>
 
-  <arg name="rhosVisibility_"/>
-  <arg name="rhoTracking_"/>
-  <arg name="target_name_"/>
-  <arg name="odom_topic" default="/ekf/ekf_odom"/>
-  <arg name="grasp_height" default="0.09"/>
-  <arg name="rho_grasp" default="0.0"/>
-  <arg name="hold_yaw" default="true"/>
-  <arg name="vmax" default="0.40"/>
-  <arg name="amax" default="0.40"/>
+  <!-- 小车抓取模式开关；true 启用 Twist 输入、飞行轨迹确认和小车闭爪门限。 -->
+  <arg name="car_grasp" default="false"/>
+  <!-- 传给 rhosVisibility 的可见方向代价权重；0 关闭该代价。 -->
+  <arg name="rhosVisibility_" default="0.0"/>
+  <!-- 传给 rhoTracking 的目标位置跟踪代价权重。 -->
+  <arg name="rhoTracking_" default="1000.0"/>
+  <!-- 目标小车位姿输入话题，重映射到规划器的私有 target 话题。 -->
+  <arg name="target_name_" default="/vrpn_client_node/HIARM_car/pose"/>
+  <!-- 目标小车原点线速度 TwistStamped 话题，重映射到 target_twist。 -->
+  <arg name="target_twist_topic" value="/vrpn_client_node/HIARM_car/twist"/>
+  <!-- 速度来源：小车模式用 twist，普通模式用位姿差分 pose_difference。 -->
+  <arg name="target_velocity_source" value="$(eval 'twist' if str(arg('car_grasp')).lower() == 'true' else 'pose_difference')"/>
+  <!-- 目标线速度一阶低通截止频率，单位 Hz；0 表示旁路。 -->
+  <arg name="target_velocity_cutoff_hz" value="3.0"/>
+  <!-- 无人机 EKF 里程计输入话题。 -->
+  <arg name="odom_topic" value="/ekf/ekf_odom"/>
+  <!-- 传给 pos_dz 的抓取点相对小车刚体原点 Z 偏移，单位 m。 -->
+  <arg name="grasp_height" value="0.09"/>
+  <!-- 传给 rhoGrasp 的接近方向代价权重；正值偏好小车刚体 -X 方向，0 关闭。 -->
+  <arg name="rho_grasp" value="0.0"/>
+  <!-- 传给 hold_yaw_on_trigger 的通用触发航向保持开关。 -->
+  <arg name="hold_yaw" value="true"/>
+  <!-- 小车模式是否以水平运动方向作为目标航向；false 保持新任务初始航向。 -->
+  <arg name="velocity_heading" value="true"/>
+  <!-- 闭爪命令发出后继续跟随的计时，单位 s；并非舵机到位确认。 -->
+  <arg name="grasp_close_duration" value="0.85"/>
+  <!-- 抬升阶段期望点与无人机的三维误差上限，单位 m。 -->
+  <arg name="grasp_lift_abort_distance" value="0.10"/>
+  <!-- 再次触发时发出张爪命令后的等待时间，单位 s。 -->
+  <arg name="grasp_open_duration" value="0.85"/>
+  <!-- 再次触发时发送的张爪位置命令，单位 rad。 -->
+  <arg name="grasp_open_position" value="0.0"/>
+  <!-- 飞行轨迹状态消息的新鲜度上限，单位 s。 -->
+  <arg name="flight_status_timeout" value="0.20"/>
+  <!-- 闭爪三维距离门限，单位 m；小车模式 0.02，普通模式 0.03。 -->
+  <arg name="grasp_start_dis" value="$(eval 0.02 if str(arg('car_grasp')).lower() == 'true' else 0.03)"/>
+  <!-- 闭爪三维相对速度门限，单位 m/s；小车模式 0.10，普通模式 0.05。 -->
+  <arg name="grasp_max_relative_speed" value="$(eval 0.10 if str(arg('car_grasp')).lower() == 'true' else 0.05)"/>
+  <!-- 闭爪时实际航向与目标航向的误差上限，单位 rad。 -->
+  <arg name="grasp_max_yaw_error" value="0.174533"/>
+  <!-- 距离、相对速度、航向及飞行状态连续满足的时间，单位 s。 -->
+  <arg name="grasp_gate_duration" value="0.15"/>
+  <!-- 低速或静止方向判断门限，单位 m/s。 -->
+  <arg name="grasp_yaw_speed_low" value="0.05"/>
+  <!-- 高速方向确认及角速度前馈门限，单位 m/s。 -->
+  <arg name="grasp_yaw_speed_high" value="0.08"/>
+  <!-- 速度方向与方向角速度前馈的滤波截止频率，单位 Hz。 -->
+  <arg name="grasp_yaw_velocity_filter_hz" value="1.0"/>
+  <!-- 静止或高速方向确认时间，单位 s；低速运动用两倍时长。 -->
+  <arg name="grasp_yaw_direction_dwell" value="0.25"/>
+  <!-- 规划三维速度参考上限，单位 m/s；远距离优化中是软惩罚。 -->
+  <arg name="vmax" value="0.70"/>
+  <!-- 规划三维加速度参考上限，单位 m/s²；远距离优化中是软惩罚。 -->
+  <arg name="amax" value="0.70"/>
 
   <node pkg="nodelet" type="nodelet" name="manager" args="manager" output="screen">
+    <!-- nodelet manager 工作线程数。 -->
     <param name="num_worker_threads" value="2"/>
   </node>
 
   <node pkg="nodelet" type="nodelet" name="planning" args="load planning/Nodelet manager" output="screen">
-    <!-- <remap from="~odom" to="odom"/>  -->
     <remap from="~odom" to="$(arg odom_topic)"/>
     <remap from="~heartbeat" to="heartbeat"/>
     <remap from="~trajectory" to="trajectory"/>
     <remap from="~replanState" to="replanState"/>
     <remap from="~target" to="$(arg target_name_)"/>
+    <remap from="~target_twist" to="$(arg target_twist_topic)"/>
     <remap from="~triger" to="/triger"/>
     <remap from="~land_triger" to="/land_triger"/>
 
+    <!-- 规划器定时回调频率，单位 Hz；不是飞控或舵机控制频率。 -->
     <param name="plan_hz" value="20"/>
 
+    <!-- 轨迹优化每段的惩罚积分采样数；增加会提高计算量。 -->
     <param name="K" value="8"/>
+    <!-- 由上方 arg 设置；远距离优化的三维速度软约束，近距离连接轨迹做发布前检查。 -->
     <param name="vmax" value="$(arg vmax)"/>
+    <!-- 由上方 arg 设置；远距离优化的三维加速度软约束，近距离连接轨迹做发布前检查。 -->
     <param name="amax" value="$(arg amax)"/>
+    <!-- 轨迹时长代价权重。 -->
     <param name="rhoT" value="20.0"/>
+    <!-- 空间走廊位置越界惩罚权重。 -->
     <param name="rhoP" value="10000.0"/>
+    <!-- 远距离轨迹速度超出 vmax 的惩罚权重，并非硬限速。 -->
     <param name="rhoV" value="10000.0"/>
+    <!-- 远距离轨迹加速度超出 amax 的惩罚权重，并非硬限速。 -->
     <param name="rhoA" value="5000.0"/>
+    <!-- 由 rhoTracking_ 设置；目标位置跟踪代价权重。 -->
     <param name="rhoTracking" value="$(arg rhoTracking_)"/>
+    <!-- 由 rhosVisibility_ 设置；目标可见方向代价权重，0 为关闭。 -->
     <param name="rhosVisibility" value="$(arg rhosVisibility_)"/>
-    <!-- Zero: approach from the current side. Positive: prefer target body -X,
-         rotated by grasp_yaw. This is independent of the aircraft's heading. -->
+    <!-- 由 rho_grasp 设置；偏好从小车刚体 -X 方向接近，方向再由 grasp_yaw 旋转。 -->
     <param name="rhoGrasp" value="$(arg rho_grasp)"/>
+    <!-- 由 hold_yaw 设置；通用触发航向保持选项，小车显式航向轨迹另由 velocity_heading 决定。 -->
     <param name="hold_yaw_on_trigger" value="$(arg hold_yaw)"/>
-    <param name="post_grasp_lift" value="0.0"/>
+    <!-- 由同名 arg 设置；小车模式选择速度方向航向或任务初始航向。 -->
+    <param name="velocity_heading" value="$(arg velocity_heading)"/>
+    <!-- 由 car_grasp 设置；仅小车模式启用速度对齐的预接近点。 -->
+    <param name="pregrasp_enabled" value="$(arg car_grasp)"/>
+    <!-- 小车真机模式要求飞行节点确认本次轨迹；普通规划可在没有该状态话题时生成轨迹。 -->
+    <param name="require_flight_status" value="$(arg car_grasp)"/>
+    <!-- 预接近点在抓取点后方的水平偏移，单位 m。 -->
+    <param name="pregrasp_distance" value="0.25"/>
+    <!-- 抬升阶段抓取目标点在世界 Z 方向增加的高度，单位 m。 -->
+    <param name="post_grasp_lift" value="0.2"/>
+    <!-- 由同名 arg 设置；闭爪命令后的持续跟随计时，单位 s。 -->
+    <param name="grasp_close_duration" value="$(arg grasp_close_duration)"/>
+    <!-- 由同名 arg 设置；抬升阶段三维跟踪误差异常上限，单位 m。 -->
+    <param name="grasp_lift_abort_distance" value="$(arg grasp_lift_abort_distance)"/>
+    <!-- 由同名 arg 设置；再次触发后张爪命令的等待计时，单位 s。 -->
+    <param name="grasp_open_duration" value="$(arg grasp_open_duration)"/>
+    <!-- 由同名 arg 设置；再次触发时的张爪位置命令，单位 rad。 -->
+    <param name="grasp_open_position" value="$(arg grasp_open_position)"/>
+    <!-- 由同名 arg 设置；本次任务飞行轨迹状态的新鲜度上限，单位 s。 -->
+    <param name="flight_status_timeout" value="$(arg flight_status_timeout)"/>
+    <!-- 由同名 arg 设置；闭爪全部门限连续满足的时间，单位 s。 -->
+    <param name="grasp_gate_duration" value="$(arg grasp_gate_duration)"/>
+    <!-- 由同名 arg 设置；允许闭爪的航向误差上限，单位 rad。 -->
+    <param name="grasp_max_yaw_error" value="$(arg grasp_max_yaw_error)"/>
+    <!-- 抬升高度偏移平滑增加的时间，单位 s。 -->
+    <param name="grasp_lift_duration" value="2.0"/>
+    <!-- 近距离跟随连接轨迹的初始预测时域，单位 s。 -->
+    <param name="grasp_follow_horizon" value="0.5"/>
+    <!-- 目标位姿消息 header 年龄及接收间隔上限，单位 s。 -->
+    <param name="target_timeout" value="0.20"/>
+    <!-- 目标 Twist 接收新鲜度及速度滤波历史有效期，单位 s。 -->
+    <param name="target_twist_timeout" value="0.20"/>
+    <!-- 由同名 arg 设置；选择独立 Twist 或位姿差分速度，Twist 丢失不会自动切换。 -->
+    <param name="target_velocity_source" value="$(arg target_velocity_source)"/>
+    <!-- 由同名 arg 设置；小车 XYZ 线速度低通截止频率，单位 Hz。 -->
+    <param name="target_velocity_cutoff_hz" type="double" value="$(arg target_velocity_cutoff_hz)"/>
+    <!-- 目标位姿与 Twist 接收时间允许的最大差值，单位 s。 -->
+    <param name="target_pose_twist_max_skew" value="0.15"/>
+    <!-- 是否额外按本机 ROS 时间检查 Twist header 的绝对年龄；需先确认时钟映射。 -->
+    <param name="target_twist_check_header_age" value="false"/>
+    <!-- 无人机 EKF 里程计消息 header 年龄及接收间隔上限，单位 s。 -->
+    <param name="odom_timeout" value="0.20"/>
+    <!-- 闭爪期间三维位置误差的异常退出门限，单位 m；不同于闭爪触发门限。 -->
+    <param name="grasp_abort_distance" value="0.20"/>
+    <!-- 闭爪期间三维、抬升期间水平相对速度的异常退出门限，单位 m/s。 -->
+    <param name="grasp_abort_relative_speed" value="0.50"/>
+    <!-- 闭爪及抬升期间航向误差的异常退出门限，单位 rad。 -->
+    <param name="grasp_abort_yaw_error" value="0.785398"/>
+    <!-- 规划航向轨迹的角速度上限，单位 rad/s。 -->
+    <param name="grasp_yaw_rate_max" value="0.60"/>
+    <!-- 规划航向轨迹的角加速度上限，单位 rad/s²。 -->
+    <param name="grasp_yaw_acc_max" value="1.20"/>
+    <!-- 由同名 arg 设置；低速方向判断门限，单位 m/s。 -->
+    <param name="grasp_yaw_speed_low" value="$(arg grasp_yaw_speed_low)"/>
+    <!-- 由同名 arg 设置；高速方向确认门限，单位 m/s。 -->
+    <param name="grasp_yaw_speed_high" value="$(arg grasp_yaw_speed_high)"/>
+    <!-- 由同名 arg 设置；速度方向滤波截止频率，单位 Hz。 -->
+    <param name="grasp_yaw_velocity_filter_hz" type="double" value="$(arg grasp_yaw_velocity_filter_hz)"/>
+    <!-- 由同名 arg 设置；方向稳定确认时间，单位 s。 -->
+    <param name="grasp_yaw_direction_dwell" value="$(arg grasp_yaw_direction_dwell)"/>
+    <!-- 速度方向可靠时加到无人机目标航向的偏角，单位 rad。 -->
+    <param name="grasp_heading_offset" value="0.0"/>
+    <!-- 可见区域几何及方向约束使用的角度余量，单位 rad。 -->
     <param name="theta_clearance" value="0.8"/>
+    <!-- 优化空间走廊边界的距离余量，单位 m；并非实物安全距离保证。 -->
     <param name="clearance_d" value="0.2"/>
+    <!-- 优化跟踪 Z 误差及部分到位判断的容差，单位 m；不是闭爪距离门限。 -->
     <param name="tolerance_d" value="0.02"/>
 
-    <!-- real dist = gtasp_tole_dis * v -->
-    <!-- <param name="grasp_tole_dis" value="0.40"/> -->
+    <!-- 旧参数；当前正常抓取流程只读取、未用于闭爪判断。 -->
     <param name="grasp_tole_dis" value="0.25"/>
-    <param name="grasp_start_dis" value="0.05"/>
-    <param name="grasp_max_relative_speed" value="0.10"/>
-    <!-- <param name="grasp_yaw" value="0.985"/> -->
+    <!-- 由同名 arg 设置；预测抓取点与无人机的三维闭爪距离门限，单位 m。 -->
+    <param name="grasp_start_dis" value="$(arg grasp_start_dis)"/>
+    <!-- 由同名 arg 设置；抓取点与无人机的三维闭爪相对速度门限，单位 m/s。 -->
+    <param name="grasp_max_relative_speed" value="$(arg grasp_max_relative_speed)"/>
+    <!-- 远距离接近方向相对小车刚体朝向的偏角，单位 rad；rhoGrasp 为 0 时不施加该代价。 -->
     <param name="grasp_yaw" value="0.0"/>
 
+    <!-- 可见区域构建的参考半径，单位 m；不是当前抓取的固定跟车距离。 -->
     <param name="tracking_dist" value="1.0"/>
 
+    <!-- 远距离目标预测时域及优化轨迹时长基准，单位 s。 -->
     <param name="tracking_dur" value="1.5"/>
+    <!-- 远距离目标预测及优化跟踪代价的采样间隔，单位 s。 -->
     <param name="tracking_dt" value="0.2"/>
+    <!-- 是否走独立调试计时路径；正常抓取应为 false。 -->
     <param name="debug" value="false"/>
 
-    <!-- <param name="pos_dx" value="0.08"/> -->
-    <!-- <param name="pos_dy" value="0.085"/> -->
-    <!-- <param name="pos_dz" value="-0.01"/> -->
-    <!-- bottle -->
-    <!-- <param name="pos_dx" value="0.060"/> -->
-    <!-- box 0.125 -->
+    <!-- 抓取点相对小车动捕刚体原点的局部 X 偏移，单位 m。 -->
     <param name="pos_dx" value="0.0"/>
-    <!-- bottle 0.075 -->
+    <!-- 抓取点相对小车动捕刚体原点的局部 Y 偏移，单位 m。 -->
     <param name="pos_dy" value="0.0"/>
-    <!-- y box 0.082 -->
+    <!-- 由 grasp_height 设置；抓取点相对小车动捕刚体原点的局部 Z 偏移，单位 m。 -->
     <param name="pos_dz" value="$(arg grasp_height)"/>
+    <!-- 远距离优化末端目标速度的世界系 X 分量增量，单位 m/s。 -->
     <param name="grasp_vx" value="0.0"/>
+    <!-- 远距离优化末端目标速度的世界系 Y 分量增量，单位 m/s。 -->
     <param name="grasp_vy" value="0.0"/>
+    <!-- 远距离优化末端目标速度的世界系 Z 分量增量，单位 m/s。 -->
     <param name="grasp_vz" value="0.0"/>
+    <!-- 新轨迹起始时间相对当前 ROS 时间向未来偏移的时长，单位 s。 -->
     <param name="replan_head_time" value="0.003"/>
 
+    <!-- 发给夹爪控制链的闭爪位置命令，单位 rad；不代表舵机实际到位。 -->
     <param name="grasp_position" value="-12.7"/>
+    <!-- 旧搜索式预测器的加速度代价权重；当前刚体预测路径不使用。 -->
     <param name="prediction/rho_a" value="1.0"/>
+    <!-- 远距离刚体预测时抓取点预测速度的有效性上限，单位 m/s；不是飞机限速。 -->
     <param name="prediction/vmax" value="4.0"/>
-    <!-- Seconds for smoothing mocap yaw rate; limit is in rad/s. -->
+    <!-- 小车车身 yaw 角速度估计的一阶平滑时间常数，单位 s。 -->
     <param name="target_yaw_filter_tau" value="0.1"/>
+    <!-- 小车车身 yaw 角速度测量有效范围，单位 rad/s；超出时估计重置。 -->
     <param name="target_yaw_rate_limit" value="3.0"/>
   </node>
   <node pkg="planning" name="traj_server" type="traj_server" output="screen">
     <remap from="~position_cmd" to="position_cmd"/>
     <remap from="~trajectory" to="trajectory"/>
     <remap from="~heartbeat" to="heartbeat"/>
+    <!-- traj_server 参数；当前 traj_server.cpp 未读取，修改它不会改变轨迹前视。 -->
     <param name="time_forward" value="1.0" type="double"/>
   </node>
   <node pkg="planning" name="trigger_rc" type="trigger_rc" output="screen">

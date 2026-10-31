@@ -38,10 +38,17 @@
 #include <vector>
 #include <unordered_set>
 #include <algorithm>
+#include <mutex>
 
 namespace
 {
   std::unordered_set<std::string> name_blacklist_({"VRPN Control"});
+  // Preserve the existing process-wide pose calibration and share it with twist.
+  std::mutex clock_offset_mutex;
+  int clock_offset_samples = 0;
+  double clock_offset_sum = 0.0;
+  double clock_offset = 0.0;
+  bool clock_offset_ready = false;
 }
 
 namespace vrpn_client_ros
@@ -142,11 +149,6 @@ namespace vrpn_client_ros
   {
     VrpnTrackerRos *tracker = static_cast<VrpnTrackerRos *>(userData);
 
-    // wmywmy
-    static int count = 0;
-    static double sum_time = 0.0;
-    // wmywmy
-
     ros::Publisher *pose_pub;
     std::size_t sensor_index(0);
     ros::NodeHandle nh = tracker->output_nh_;
@@ -175,30 +177,24 @@ namespace vrpn_client_ros
     {
       if (tracker->use_server_time_)
       {
-        // wmywmy
-        if (count < 600)
+        std::lock_guard<std::mutex> lock(clock_offset_mutex);
+        if (clock_offset_samples < 600)
         {
           tracker->pose_msg_.header.stamp.sec = tracker_pose.msg_time.tv_sec;
           tracker->pose_msg_.header.stamp.nsec = tracker_pose.msg_time.tv_usec * 1000;
-          sum_time += (tracker->pose_msg_.header.stamp - ros::Time::now()).toSec();
-          // std::cout << " | sum_time = " << sum_time << std::endl;
-          count++;
+          clock_offset_sum += (tracker->pose_msg_.header.stamp - ros::Time::now()).toSec();
+          ++clock_offset_samples;
           return;
-        }  else if (count == 600){
-          sum_time /= (double)count;
-          // std::cout << "Duration = sum_time"  << sum_time << std::endl;
-          count++;
+        } else if (!clock_offset_ready) {
+          clock_offset = clock_offset_sum / clock_offset_samples;
+          clock_offset_ready = true;
           return;
         } else {
-          ros::Duration delta_time(sum_time);
+          ros::Duration delta_time(clock_offset);
           tracker->pose_msg_.header.stamp.sec = tracker_pose.msg_time.tv_sec;
           tracker->pose_msg_.header.stamp.nsec = tracker_pose.msg_time.tv_usec * 1000;
           tracker->pose_msg_.header.stamp = tracker->pose_msg_.header.stamp - delta_time;
-          // std::cout << "dt = " << sum_time << std::endl;
         }
-        
-        // tracker->pose_msg_.header.stamp.sec = tracker_pose.msg_time.tv_sec;
-        // tracker->pose_msg_.header.stamp.nsec = tracker_pose.msg_time.tv_usec * 1000;
       }
       else
       {
@@ -282,8 +278,15 @@ namespace vrpn_client_ros
     {
       if (tracker->use_server_time_)
       {
+        std::lock_guard<std::mutex> lock(clock_offset_mutex);
+        if (!clock_offset_ready)
+        {
+          ROS_WARN_THROTTLE(5.0, "Waiting for subscribed pose messages to calibrate VRPN timestamps before publishing twist");
+          return;
+        }
         tracker->twist_msg_.header.stamp.sec = tracker_twist.msg_time.tv_sec;
         tracker->twist_msg_.header.stamp.nsec = tracker_twist.msg_time.tv_usec * 1000;
+        tracker->twist_msg_.header.stamp -= ros::Duration(clock_offset);
       }
       else
       {
@@ -418,7 +421,7 @@ namespace vrpn_client_ros
     connection_->mainloop();
     if (!connection_->doing_okay())
     {
-      ROS_WARN("VRPN connection is not 'doing okay'");
+      ROS_WARN_THROTTLE(1.0, "VRPN connection is not 'doing okay'");
     }
     for (TrackerMap::iterator it = trackers_.begin(); it != trackers_.end(); ++it)
     {

@@ -317,8 +317,7 @@ int TrajOpt::optimize(const double& delta) {
   auto ret = lbfgs::lbfgs_optimize(dim_t_ + dim_p_ + 1, x_, &minObjective,
                                    &objectiveFunc, nullptr,
                                    &earlyExit, this, &lbfgs_params);
-  std::cout << "\033[32m"
-            << "ret: " << ret << "\033[0m" << std::endl;
+  ROS_INFO_THROTTLE(1.0, "[traj_opt] optimizer return: %d", ret);
   t_ = t;
   p_ = p;
   return ret;
@@ -338,7 +337,7 @@ bool TrajOpt::generate_traj(const Eigen::MatrixXd& iniState,
     cfgHs_.push_back(cfgHs_[0]);
   }
   if (!extractVs(cfgHs_, cfgVs_)) {
-    ROS_ERROR("extractVs fail!");
+    ROS_ERROR_THROTTLE(1.0, "extractVs fail!");
     return false;
   }
   N_ = 2 * cfgHs_.size();
@@ -394,7 +393,7 @@ bool TrajOpt::generate_traj(const Eigen::MatrixXd& iniState,
     cfgHs_.push_back(cfgHs_[0]);
   }
   if (!extractVs(cfgHs_, cfgVs_)) {
-    ROS_ERROR("extractVs fail!");
+    ROS_ERROR_THROTTLE(1.0, "extractVs fail!");
     return false;
   }
   N_ = 2 * cfgHs_.size();
@@ -448,7 +447,7 @@ bool TrajOpt::generate_traj(const Eigen::MatrixXd& iniState,
     cfgHs_.push_back(cfgHs_[0]);
   }
   if (!extractVs(cfgHs_, cfgVs_)) {
-    ROS_ERROR("extractVs fail!");
+    ROS_ERROR_THROTTLE(1.0, "extractVs fail!");
     return false;
   }
   N_ = 2 * cfgHs_.size();
