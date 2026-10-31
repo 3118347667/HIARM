@@ -13,7 +13,9 @@ fi
 
 source "${CURRENT_DIR}/../devel/setup.bash"
 TOPICS=(
+  /rosparam_snapshot
   "/${MAV_NAME}/rosparam_snapshot"
+  /drone0/planning/rosparam_snapshot
   /rosout
   /rosout_agg
   /diagnostics
@@ -52,12 +54,21 @@ TOPICS=(
   /mavros/tunnel/out
   /mavros/debug_value/debug_vector
   "/${MAV_NAME}/trajectory"
+  "/${MAV_NAME}/flight_trajectory_status"
   "/${MAV_NAME}/reference"
 
   # Tactile and grasp state
   /tact_sensor/tact_state
   /tact_sensor/reference_mag
   /grasp_state
+  /graspState
+  /drone0/planning/grasp_phase
+  /drone0/planning/pregrasp_target
+  /drone0/planning/grasp_alignment
+  /drone0/planning/grasp_point_mode
+  /drone0/replanState
+  /triger
+  /land_triger
 
   # Mapping, perception, and navigation
   /drone0/gridmap

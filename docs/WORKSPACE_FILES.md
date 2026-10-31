@@ -2,6 +2,8 @@
 
 生成日期：2026-10-23；清点对象：Git 已跟踪文件及未被忽略的新增文件，共 **620** 个（含本导览）。
 
+移动小车抓取相关的后续补充文档：[抓取流程与调参](../src/planning/planning/MOVING_GRASP.md)、[planning.launch 参数参考](../src/planning/planning/PARAMETERS.md)。下方逐文件清单仍是生成日期的快照，不代表实时清点结果。
+
 ## 阅读顺序
 
 1. 真机主链路：`scripts/run.sh` → MAVROS → `vrpn_client_ros` → `ekf_pose` → `flygripper_flight` → `flygripper_bringup` / `flygripper_actuator`。这是当前脚本的启动顺序，不等于所有节点都已在真机验证。

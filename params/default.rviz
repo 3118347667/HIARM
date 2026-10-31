@@ -1,0 +1,142 @@
+Panels:
+  - Class: rviz/Displays
+    Name: Displays
+    Property Tree Widget:
+      Expanded:
+        - /Global Options1
+      Splitter Ratio: 0.5
+  - Class: rviz/Views
+    Name: Views
+Visualization Manager:
+  Class: ""
+  Displays:
+    - Class: rviz/Grid
+      Name: Grid
+      Enabled: true
+      Value: true
+      Reference Frame: <Fixed Frame>
+      Plane: XY
+      Plane Cell Count: 20
+      Cell Size: 1
+      Color: 130; 130; 130
+      Alpha: 0.5
+      Line Style:
+        Value: Lines
+        Line Width: 0.02
+    - Class: rviz/Axes
+      Name: World axes
+      Enabled: true
+      Value: true
+      Reference Frame: world
+      Length: 1
+      Radius: 0.025
+      Show Trail: false
+    - Class: rviz/Pose
+      Name: Drone VRPN heading (+Y) (optional)
+      Enabled: false
+      Value: false
+      Topic: /hiarm_rviz/drone_pose
+      Queue Size: 10
+      Shape: Arrow
+      Color: 0; 200; 255
+      Shaft Length: 0.35
+      Shaft Radius: 0.035
+      Head Length: 0.15
+      Head Radius: 0.08
+    - Class: rviz/Odometry
+      Name: Drone EKF pose
+      Enabled: true
+      Value: true
+      Topic: /ekf/ekf_odom
+      Queue Size: 10
+      Keep: 1
+      Position Tolerance: 0
+      Angle Tolerance: 0
+      Shape:
+        Value: Arrow
+        Color: 0; 200; 255
+        Alpha: 1
+        Shaft Length: 0.35
+        Shaft Radius: 0.035
+        Head Length: 0.15
+        Head Radius: 0.08
+      Covariance:
+        Value: false
+    - Class: rviz/Pose
+      Name: Car VRPN heading (+Y)
+      Enabled: true
+      Value: true
+      Topic: /hiarm_rviz/car_pose
+      Queue Size: 10
+      Shape: Arrow
+      Color: 255; 140; 0
+      Shaft Length: 0.35
+      Shaft Radius: 0.035
+      Head Length: 0.15
+      Head Radius: 0.08
+    - Class: rviz/Path
+      Name: Planned trajectory
+      Enabled: true
+      Value: true
+      Topic: /drone0/planning/traj
+      Queue Size: 10
+      Buffer Length: 1
+      Color: 0; 255; 100
+      Alpha: 1
+      Line Style: Billboards
+      Line Width: 0.04
+      Pose Style: None
+    - Class: rviz/Path
+      Name: Controller reference
+      Enabled: true
+      Value: true
+      Topic: /flygripper/reference
+      Queue Size: 10
+      Buffer Length: 1
+      Color: 255; 80; 230
+      Alpha: 1
+      Line Style: Billboards
+      Line Width: 0.03
+      Pose Style: None
+    - Class: rviz/Path
+      Name: Car prediction
+      Enabled: false
+      Value: false
+      Topic: /drone0/planning/car_predict
+      Queue Size: 10
+      Buffer Length: 1
+      Color: 255; 190; 40
+      Alpha: 1
+      Line Style: Lines
+      Pose Style: None
+  Enabled: true
+  Global Options:
+    Background Color: 35; 35; 35
+    Default Light: true
+    Fixed Frame: world
+    Frame Rate: 30
+  Name: root
+  Tools:
+    - Class: rviz/MoveCamera
+    - Class: rviz/Interact
+    - Class: rviz/Select
+  Value: true
+  Views:
+    Current:
+      Class: rviz/XYOrbit
+      Distance: 8
+      Focal Point:
+        X: 0
+        Y: 0
+        Z: 0
+      Pitch: 0.65
+      Yaw: 0.78
+      Target Frame: <Fixed Frame>
+    Saved: ~
+Window Geometry:
+  Width: 1280
+  Height: 800
+  X: 0
+  Y: 0
+  Hide Left Dock: false
+  Hide Right Dock: false

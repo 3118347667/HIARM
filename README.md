@@ -2,6 +2,8 @@
 
 自动起飞分支：真机在遥控器解锁后，由 CH5 触发相对高度起飞并悬停。操作、参数、接管和验证范围见 [ArduPilot 自动起飞说明](docs/auto_takeoff.md)。
 
+移动小车抓取使用 `./scripts/grasp_car.sh`（`grasping.launch`），飞行与舵机节点由 `./scripts/run.sh` 等入口单独启动；`scripts/plan.sh` 是另一条规划路径。抓取状态、反馈边界和调参步骤见 [移动小车抓取](src/planning/planning/MOVING_GRASP.md)，`planning.launch` 的逐项参数、默认值、单位和适用阶段见 [小车抓取规划参数参考](src/planning/planning/PARAMETERS.md)。文档默认值是当前工作区配置，需另行核对板端版本及实际运行参数。
+
 飞行控制的传感器回调、控制循环和切模服务分别运行；控制循环只消费输入快照，切模结果仍以 `/mavros/state` 为准。`/flygripper/runtime_diagnostics` 以约 10 Hz 发布时间戳年龄、单调时钟回调间隔、输入序号缺口、控制耗时和切模耗时，`bags/bag.sh` 会连同 `/rosout`、`/rosout_agg` 一起录制。`*_callback_gap_ms` 对应控制快照中的接收时间，`*_live_callback_gap_ms` 对应接收线程的最新回调，可用来区分控制快照滞后与接收停顿。超过现有 IMU/EKF 新鲜度门限仍触发交接，独立接收线程不改变数据有效性要求。工作线程取消会清除排队请求并忽略过期结果，但已经发到飞控的服务请求不能撤回。
 
 隔离 ROS 回归测试：在构建容器中加载 `devel/setup.bash` 后执行 `rostest flygripper_flight auto_takeoff.test`，覆盖自动起飞、数据失效、慢切模服务及迟到确认；这些测试使用模拟服务和输入，不证明实飞性能。
@@ -37,4 +39,4 @@ Wi-Fi 切换脚本 `./scripts/switch_wifi.sh` 只激活 NetworkManager 中已有
 
 无网络时，如需手动用 Mac 时间设置板端系统时钟，在 Mac 项目目录运行 `./scripts/sync_board_time_adb.sh`。脚本要求 ADB shell 为 root；连接多个设备时传入设备序列号，例如 `./scripts/sync_board_time_adb.sh 2f49935e4210e61b`。它不会修改 NTP 设置或硬件 RTC。
 
-录制实飞数据时，在节点启动后运行 `./bags/bag.sh`。脚本固定订阅参数快照、控制器/机体/飞行状态机参数更新、ROS 日志和运行诊断；默认最多等待 30 秒加载控制器与机体参数，可用 `SNAPSHOT_TIMEOUT_SECONDS` 调整。快照失败会明确报错并停止启动录包，避免静默漏录；按 Ctrl-C 停止后会检查实际 bag 中的快照内容和三个参数更新话题，缺失时返回失败并保留 bag，ROS 日志或运行诊断无消息时另行警告。快照是录制开始时的一次初始参数，后续变化由 `parameter_updates` 记录。SSH/ADB 上传脚本均包含 `bags/` 下的录制程序，并排除录包数据；更新程序后也应同步更新板端录包脚本。
+录制实飞数据时，在节点启动后运行 `./bags/bag.sh`。脚本固定订阅参数快照、控制器/机体/飞行状态机参数更新、ROS 日志和运行诊断；默认最多等待 30 秒加载控制器与机体参数，可用 `SNAPSHOT_TIMEOUT_SECONDS` 调整。快照失败会明确报错并停止启动录包，避免静默漏录；按 Ctrl-C 停止后会检查实际 bag 中的快照内容和三个参数更新话题，缺失时返回失败并保留 bag，ROS 日志或运行诊断无消息时另行警告。飞行相关初始参数及动态参数更新分别记录；脚本也在规划器参数树出现或变化时发布 `/drone0/planning/rosparam_snapshot`。规划器未启动或话题没有实际消息时，该快照可能缺失；参数服务器发生变化也不代表规划器已重新读取。SSH/ADB 上传脚本均包含 `bags/` 下的录制程序，并排除录包数据；更新程序后也应同步更新板端录包脚本。
