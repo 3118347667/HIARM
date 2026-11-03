@@ -35,12 +35,12 @@
   <arg name="grasp_open_position" value="0.0"/>
   <!-- 飞行轨迹状态消息的新鲜度上限，单位 s。 -->
   <arg name="flight_status_timeout" value="0.20"/>
-  <!-- 闭爪三维距离门限，单位 m；小车模式 0.02，普通模式 0.03。 -->
-  <arg name="grasp_start_dis" value="$(eval 0.02 if str(arg('car_grasp')).lower() == 'true' else 0.03)"/>
+  <!-- 闭爪三维距离门限，单位 m；小车模式 0.03，普通模式 0.03。 -->
+  <arg name="grasp_start_dis" value="$(eval 0.03 if str(arg('car_grasp')).lower() == 'true' else 0.03)"/>
   <!-- 闭爪三维相对速度门限，单位 m/s；小车模式 0.10，普通模式 0.05。 -->
   <arg name="grasp_max_relative_speed" value="$(eval 0.10 if str(arg('car_grasp')).lower() == 'true' else 0.05)"/>
-  <!-- 闭爪时实际航向与目标航向的误差上限，单位 rad。 -->
-  <arg name="grasp_max_yaw_error" value="0.174533"/>
+  <!-- 闭爪时实际航向与目标航向的误差上限，单位度。 -->
+  <arg name="grasp_max_yaw_error" value="10.0"/>
   <!-- 距离、相对速度、航向及飞行状态连续满足的时间，单位 s。 -->
   <arg name="grasp_gate_duration" value="0.15"/>
   <!-- 低速或静止方向判断门限，单位 m/s。 -->
@@ -52,9 +52,9 @@
   <!-- 静止或高速方向确认时间，单位 s；低速运动用两倍时长。 -->
   <arg name="grasp_yaw_direction_dwell" value="0.25"/>
   <!-- 规划三维速度参考上限，单位 m/s；远距离优化中是软惩罚。 -->
-  <arg name="vmax" value="0.70"/>
+  <arg name="vmax" value="0.7"/>
   <!-- 规划三维加速度参考上限，单位 m/s²；远距离优化中是软惩罚。 -->
-  <arg name="amax" value="0.70"/>
+  <arg name="amax" value="0.7"/>
 
   <node pkg="nodelet" type="nodelet" name="manager" args="manager" output="screen">
     <!-- nodelet manager 工作线程数。 -->
@@ -118,8 +118,8 @@
     <param name="flight_status_timeout" value="$(arg flight_status_timeout)"/>
     <!-- 由同名 arg 设置；闭爪全部门限连续满足的时间，单位 s。 -->
     <param name="grasp_gate_duration" value="$(arg grasp_gate_duration)"/>
-    <!-- 由同名 arg 设置；允许闭爪的航向误差上限，单位 rad。 -->
-    <param name="grasp_max_yaw_error" value="$(arg grasp_max_yaw_error)"/>
+    <!-- 将同名 arg 从度转换为 rad，供规划器使用。 -->
+    <param name="grasp_max_yaw_error" value="$(eval float(arg('grasp_max_yaw_error')) * 0.017453292519943295)"/>
     <!-- 抬升高度偏移平滑增加的时间，单位 s。 -->
     <param name="grasp_lift_duration" value="2.0"/>
     <!-- 近距离跟随连接轨迹的初始预测时域，单位 s。 -->
@@ -145,9 +145,9 @@
     <!-- 闭爪及抬升期间航向误差的异常退出门限，单位 rad。 -->
     <param name="grasp_abort_yaw_error" value="0.785398"/>
     <!-- 规划航向轨迹的角速度上限，单位 rad/s。 -->
-    <param name="grasp_yaw_rate_max" value="0.60"/>
+    <param name="grasp_yaw_rate_max" value="0.80"/>
     <!-- 规划航向轨迹的角加速度上限，单位 rad/s²。 -->
-    <param name="grasp_yaw_acc_max" value="1.20"/>
+    <param name="grasp_yaw_acc_max" value="1.80"/>
     <!-- 由同名 arg 设置；低速方向判断门限，单位 m/s。 -->
     <param name="grasp_yaw_speed_low" value="$(arg grasp_yaw_speed_low)"/>
     <!-- 由同名 arg 设置；高速方向确认门限，单位 m/s。 -->
