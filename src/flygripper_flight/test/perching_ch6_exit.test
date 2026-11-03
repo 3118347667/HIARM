@@ -1,0 +1,4 @@
+<launch>
+  <test test-name="perching_ch6_exit_audit" pkg="flygripper_flight"
+        type="test_perching_ch6_exit.py" time-limit="180"/>
+</launch>

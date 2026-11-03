@@ -1,0 +1,17 @@
+std_msgs/Header header
+uint8 IDLE=0
+uint8 PREPARED=1
+uint8 MOTORS_OFF=2
+uint8 SPINUP=3
+uint8 OPENING=4
+uint8 RETREAT=5
+uint8 COMPLETE=6
+uint8 ABORTED=7
+uint8 UNLOADING=8
+uint8 SUPPORT_VERIFY=9
+uint8 FINAL_UNLOAD=10
+uint64 mission_id
+uint8 phase
+float64 saved_throttle
+float64 output_throttle
+string detail

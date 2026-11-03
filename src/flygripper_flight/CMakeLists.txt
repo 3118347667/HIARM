@@ -40,10 +40,13 @@ if(CATKIN_ENABLE_TESTING)
   target_link_libraries(test_input_buffer ${CMAKE_THREAD_LIBS_INIT} ${catkin_LIBRARIES})
   add_dependencies(test_input_buffer ${catkin_EXPORTED_TARGETS})
   add_rostest(test/auto_takeoff.test)
+  add_rostest(test/perching.test)
+  add_rostest(test/perching_ch6_exit.test)
 endif()
 
 add_executable(${PROJECT_NAME}_node
         src/flygripper_flight_node.cpp
+        src/perching.cpp
         src/fsm.cpp)
 target_link_libraries(${PROJECT_NAME}_node
         ${CMAKE_THREAD_LIBS_INIT}

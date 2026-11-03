@@ -22,9 +22,37 @@ fix_p: true
 magic_number: 0
 
 # ------------------------ Morphing -------------------------------
-morph_shrink_pos: -11.0 # 5.0 shrink angle position
+morph_shrink_pos: -9.6 # 5.0 shrink angle position
 morph_expand_pos: 0.0 # expand angle position
 morph_duration: 0.9
+morph_use_feedback: false # current servo feedback is unreliable; time is NOT proof of grasp
+
+# 飞行状态机：在 task_1 前记录有动力飞行时的推力命令；闭爪命令等待结束且
+# 运动稳定后，先进行承重测试，再保持零推力 5 秒。
+# 承重测试使用 IMU/EKF 运动数据，不依赖不可靠的舵机位置反馈。
+# 保持闭爪目标并恢复记录的推力，等待电机建立动力后，再发送开爪命令并等待；
+# 实际舵机运动未得到确认。后退方向以记录的栖停航向为基准，保持高度和航向。
+perching:
+  enabled: true # 启用栖停与复飞流程
+  unload_duration: 3.0 # 秒，将记录的推力平滑降低至测试比例
+  test_throttle_ratio: 0.15 # 记录推力命令的比例，并非经过标定的升力比例
+  support_verify_duration: 1.0 # 秒，低推力下保持稳定后再继续减载
+  final_unload_duration: 1.0 # 秒，将测试推力平滑降至零
+  max_height_drop: 0.02 # 米，下降超过 2 厘米时中止承重测试并恢复有动力悬停
+  max_downward_speed: 0.08 # 米/秒，允许的最大下降速度
+  min_vertical_acceleration: -1.5 # 米/秒²，世界坐标系 Z 轴加速度下限，用于提前检测下坠
+  sensor_max_age: 0.08 # 秒，传感器测量时间和回调间隔的最大允许值
+  gripper_open_duration: 1.0 # 秒，仅按时间等待开爪；不能确认夹爪实际打开
+  motors_off_duration: 5.0 # 秒，持续发送零推力命令
+  spinup_duration: 1.0 # 秒，恢复记录推力后等待电机建立动力
+  recovery_duration: 2.0 # 秒，将记录推力的下限平滑过渡至正常高度控制
+  retreat_distance: 0.5 # 米，相对于栖停航向的后退距离
+  retreat_duration: 2.0 # 秒，后退参考轨迹时长
+  settle_duration: 0.3 # 秒，减载前和后退完成时要求连续稳定的时间
+  max_settle_speed: 0.1 # 米/秒，稳定判定允许的最大三维速度
+  position_tolerance: 0.03 # 米，后退终点的三维位置容差
+  open_tolerance: 0.1 # 使用舵机反馈时，开爪目标的位置容差
+  timeout: 25.0 # 秒，栖停流程超时，包含承重测试、零推力保持和后退等阶段
 
 # ----------------------------- Task -------------------------------
 # task_num: assign task number
@@ -63,7 +91,7 @@ task_num: 2
 task_0: # Align
   plan_type: 0 # POINT
   plan_point_num: 1
-  plan_point_0: {x: 1.221, y: -0.095, z: 1.58, yaw: 0.0} # flying to a hovering point
+  plan_point_0: {x: -2.4646, y: -0.8616, z: 0.607, yaw: 0.0} # flying to a hovering point
   plan_terminal_vel: { x: 0.0, y: 0.0, z: 0.0}
   plan_max_vel: 0.5
   plan_max_acc: 0.5
@@ -72,18 +100,20 @@ task_0: # Align
 
   morph_action: 1  # expanding
   morph_trigger: 0 # start with planning
+  morph_auto: true
   morph_tolerance: 0.1
 
 task_1: # Grasping
   plan_type: 0 # POINT
   plan_point_num: 1
-  plan_point_0: { x: 2.221, y: -0.095, z: 1.48} # flying towards and GRASPING the object
+  plan_point_0: { x: -0.297, y: -0.523, z: 0.776} # flying towards and GRASPING the object
   plan_terminal_vel: { x: 0.0, y: 0.0, z: 0.0}
   plan_max_vel: 0.8
   plan_max_acc: 0.8
   plan_max_dyaw: 0.5
-  plan_tolerance: 0.20 #-0.15 # BIG to accelerate morph trigger
+  plan_tolerance: 0.02 #-0.15 # BIG to accelerate morph trigger
 
   morph_action: 2  # shrinking
   morph_trigger: 1 # after reach goal
+  morph_auto: false
   morph_tolerance: 1.0 # BIG to accelerate next stage plan

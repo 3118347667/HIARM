@@ -272,7 +272,9 @@ class TrajOpt {
     lbfgs::lbfgs_load_default_parameters(&lbfgs_params);
     lbfgs_params.mem_size = 16;
     lbfgs_params.past = 3;
-    lbfgs_params.g_epsilon = 0;
+    // Allow convergence near a stationary point before floating-point noise
+    // exhausts the line search. This is a normalized gradient threshold.
+    lbfgs_params.g_epsilon = 1e-4;
     lbfgs_params.min_step = 1e-16;
     lbfgs_params.delta = 1e-4;
     lbfgs_params.line_search_type = 0;

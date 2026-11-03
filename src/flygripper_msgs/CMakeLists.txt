@@ -22,6 +22,8 @@ add_message_files(
         RobotState.msg
         PolynomialTrajectory.msg
         FlightTrajectoryStatus.msg
+        PerchingCommand.msg
+        PerchingStatus.msg
         Polynomial.msg
         GeometricControllerData.msg
         TactSensor.msg

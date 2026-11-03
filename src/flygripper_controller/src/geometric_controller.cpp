@@ -205,8 +205,8 @@ void GeometricController::getCommand(const RobotState& state,
                                      const ReferenceVector& references,
                                      RobotCommand& command, const Scalar& now) {
   // Restore the original initialization trigger based on control-call spacing.
-  const bool l1_init = (now - last_ctrl_time_ > 0.3);
-  if (l1_init) {
+  const bool l1_init = contact_hold_ || (now - last_ctrl_time_ > 0.3);
+  if (l1_init && !contact_hold_) {
     ROS_WARN("Reset geometric controller.");
   }
   last_ctrl_time_ = now;
@@ -282,14 +282,14 @@ void GeometricController::getCommand(const RobotState& state,
   data_.ext_force_tact = clipVector(getTactForce(state.acc, cur_q),
                                     ctrl_parameter_->tact_force_bound);
 
-  if (acc_compensation_ == CompensationMethod::INDI) {
+  if (!contact_hold_ && acc_compensation_ == CompensationMethod::INDI) {
     //      des_thrust_acc = cur_q * (thrust_acc_norm_f * Vector<3>::UnitZ())
     //          + des_acc - acc_f;
     des_thrust_acc -= indi_acc_lpf_->apply(cur_q * data_.ext_force_indi /
                                            robot_parameter_->mass);
-  } else if (acc_compensation_ == CompensationMethod::L1) {
+  } else if (!contact_hold_ && acc_compensation_ == CompensationMethod::L1) {
     des_thrust_acc -= cur_q * data_.ext_force_l1 / robot_parameter_->mass;
-  } else if (acc_compensation_ == CompensationMethod::TACT) {
+  } else if (!contact_hold_ && acc_compensation_ == CompensationMethod::TACT) {
     des_thrust_acc -= cur_q * data_.ext_force_tact / robot_parameter_->mass;
   }
 
@@ -404,7 +404,7 @@ void GeometricController::getCommand(const RobotState& state,
       ctrl_parameter_->L1_torque_bound);  // TODO: state.omega, des_torque);
   if (l1_init) ++l1_initialization_count_;
 
-  if (alpha_compensation_ == CompensationMethod::INDI) {
+  if (!contact_hold_ && alpha_compensation_ == CompensationMethod::INDI) {
     // NOTE:use ndi instead of indi for yaw acc to prevent yaw osscilation.
     // des_torque.segment<2>(0) =(torque_f + robot_parameter_->J * (des_alpha -
     // alpha_f)).segment<2>(0);
@@ -412,7 +412,7 @@ void GeometricController::getCommand(const RobotState& state,
         (robot_parameter_->J * (des_alpha) +
          indi_alpha_lpf_->apply(torque_f - robot_parameter_->J * alpha_f))
             .segment<2>(0);
-  } else if (alpha_compensation_ == CompensationMethod::L1) {
+  } else if (!contact_hold_ && alpha_compensation_ == CompensationMethod::L1) {
     // NOTE:use ndi instead of L1 for yaw acc to prevent yaw osscilation ?
     des_torque.segment<2>(0) -= data_.ext_torque_l1.segment<2>(0);
     //    des_torque -= data_.ext_torque_l1;
@@ -504,6 +504,10 @@ void GeometricController::getCommand(const RobotState& state,
 Vector<3> GeometricController::getOmegaIntegrationTerm(const Vector<3>& error,
                                                        bool limit) {
   static Vector<3> integral_term = Vector<3>::Zero();
+  if (contact_hold_) {
+    integral_term.setZero();
+    return Vector<3>::Zero();
+  }
   for (int i = 0; i < 3; ++i) {
     if (!isZero(ctrl_parameter_->ki_omega(i))) {
       // TODO: APM

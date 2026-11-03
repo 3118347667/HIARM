@@ -232,6 +232,11 @@ void Fsm::rosSetup(ros::NodeHandle &nh) {
       "trajectory", 10, &Fsm::rosTrajCallback, this,
       input_queues_.get(Channel::Ordinary));
   traj_sub_ = nh.subscribe(traj_options_);
+  perching_options_ = inputOptions<flygripper_msgs::PerchingCommand>(
+      "perching_command", 10, &Fsm::rosPerchingCallback, this,
+      input_queues_.get(Channel::Ordinary));
+  perching_sub_ = nh.subscribe(perching_options_);
+  perching_status_pub_ = nh.advertise<flygripper_msgs::PerchingStatus>("perching_status", 10);
 
   runtime_diagnostic_pub_ = nh.advertise<diagnostic_msgs::DiagnosticArray>("runtime_diagnostics", 10);
   flight_trajectory_status_pub_ = nh.advertise<flygripper_msgs::FlightTrajectoryStatus>(
@@ -326,12 +331,28 @@ void Fsm::consumeInputs() {
   input_lock_copy_duration_ = copied - started;
   rc_snapshot_overflow_ = rc_events && rc_events->overflow;
   rc_release_seen_ = rc_snapshot_overflow_;
+  rc_traj_release_seen_ = rc_snapshot_overflow_;
+  rc_invalid_seen_ = false;
   for (size_t i = 0; rc_events && i < rc_events->size; ++i) {
     const auto& event = rc_events->events[i];
-    fromRosMsg(event.message, rc_input_, true);
+    // Decode independently: a short/invalid frame must never refresh the last
+    // valid channels or their timestamp. Preserve the fault across this batch,
+    // even when a later valid frame has both autonomy switches high.
+    Rc<CHANNEL_SIZE> decoded_rc;
+    if (event.message->channels.size() >= CHANNEL_SIZE)
+      fromRosMsg(event.message, decoded_rc, true);
+    if (!decoded_rc.valid()) {
+      rc_invalid_seen_ = rc_release_seen_ = rc_traj_release_seen_ = true;
+      ROS_ERROR_THROTTLE(1.0, "Rejected malformed RC frame (missing or invalid channels)");
+      continue;
+    }
+    rc_input_.channels = decoded_rc.channels;
     rc_input_.stamp = event.received_ros;
     rc_input_.update();
     if (!rc_input_.isGuidedMode()) rc_release_seen_ = true;
+    // Preserve a CH6 exit even if a later event in this batch is already high.
+    if (fsm_state_ == FsmState::STATE_TRAJ && rc_input_.valid() && !rc_input_.isTrajMode())
+      rc_traj_release_seen_ = true;
   }
   if (input.imu.message && input.imu.count != applied_.imu.count) {
     fromRosMsg(input.imu.message, imu_);
@@ -409,6 +430,7 @@ void Fsm::controlLoop(const ros::TimerEvent &event) {
     control_duration_ = steadySeconds() - loop_started_;
     max_control_duration_ = std::max(max_control_duration_, control_duration_);
     publishFlightTrajectoryStatus();
+    publishPerchingStatus();
     publishRuntimeDiagnostics();
   });
   checkCycleTime(1.0 / fsm_param_->loop_frequency,
@@ -440,7 +462,7 @@ void Fsm::controlLoop(const ros::TimerEvent &event) {
   }
   if (rc_release_seen_ && fsm_state_ != FsmState::STATE_MANUAL &&
       fsm_state_ != FsmState::STATE_HANDOVER)
-    beginHandover("CH5 released or RC event queue overflow");
+    beginHandover(rc_invalid_seen_ ? "Malformed RC frame" : "CH5 released or RC event queue overflow");
   //! Update robot_state, fc_state and rc_input
   if (!updateRobotState()) {
     if (fsm_state_ == FsmState::STATE_MANUAL) {
@@ -451,6 +473,8 @@ void Fsm::controlLoop(const ros::TimerEvent &event) {
       if (fsm_state_ != FsmState::STATE_HANDOVER)
         beginHandover(fault_reason_.empty() ? "Required input invalid" : fault_reason_);
       updateHandover();
+      if (fsm_state_ == FsmState::STATE_HANDOVER)
+        publishPerchingEmergencyRecovery();
     }
     return;
   }
@@ -462,12 +486,19 @@ void Fsm::controlLoop(const ros::TimerEvent &event) {
   }
   tic_toc_.toc("ros_update");
 
+  consumePerchingCommand();
+  // The flight loop is the only owner of motor output, including deliberate
+  // zero-thrust output. Input health and pilot/FCU takeover checks run first.
+  if (updatePerching()) return;
+
   //! Update FSM state and reference
-  updateFsmStateAndReference();
+  if (!perchingActive()) updateFsmStateAndReference();
   tic_toc_.toc("reference_update");
 
   robot_command_.stamp = now_;
   //! Controller preparation
+  static_cast<GeometricController*>(controller_.get())->setContactHold(
+      perching_status_.phase == flygripper_msgs::PerchingStatus::OPENING);
   controller_->prepare(robot_state_);
   //! Rotor control process for guided and traj mode
   if ((fsm_state_ == FsmState::STATE_GUIDED ||
@@ -577,6 +608,9 @@ void Fsm::controlLoop(const ros::TimerEvent &event) {
         robot_command_.attitude_command.normalize();
         robot_command_.collective_thrust_command = thrust_acc_map_.map(
             robot_command_.collective_thrust / robot_param_->mass);
+        if (!attitude_safety_handover_)
+          robot_command_.collective_thrust_command =
+              perchingRecoveryThrottle(robot_command_.collective_thrust_command);
         if (!std::isfinite(robot_command_.collective_thrust_command) ||
             !robot_command_.attitude_command.coeffs().allFinite()) {
           beginHandover("Non-finite attitude/thrust command");
@@ -586,6 +620,10 @@ void Fsm::controlLoop(const ros::TimerEvent &event) {
             std::clamp(robot_command_.collective_thrust_command, 0.0, 1.0);
         toRosMsg(robot_command_, thrust_att_command_msg_);
         thrust_att_command_pub_.publish(thrust_att_command_msg_);
+        if (!perchingActive() && fsm_state_ == FsmState::STATE_TRAJ) {
+          last_powered_throttle_ = robot_command_.collective_thrust_command;
+          last_powered_throttle_at_ = steadySeconds();
+        }
         trajectory_control_published_this_cycle_ = true;
       } else {
         ROS_WARN_THROTTLE(1.0, "other mode is not implemented.");
@@ -631,8 +669,9 @@ void Fsm::updateParameter() {
 
 bool Fsm::updateRobotState() {
   static double last_imu_stamp = -1.0;
-  bool ret = !rc_snapshot_overflow_;
+  bool ret = !rc_snapshot_overflow_ && !rc_invalid_seen_;
   fault_reason_ = rc_snapshot_overflow_ ? "RC event queue overflow; " : "";
+  if (rc_invalid_seen_) fault_reason_ += "Malformed RC frame; ";
   const auto freshness_reason = [](double stamp, double received, double gap, double timeout) {
     if (received < 0.0) return "NO MESSAGE PROCESSED YET";
     if (!std::isfinite(stamp) || stamp <= 0.0) return "INVALID HEADER TIMESTAMP";
@@ -954,9 +993,10 @@ void Fsm::updateFsmStateAndReference() {
     if (!rc_input_.isGuidedMode()) {
       beginHandover("CH5 released during trajectory control");
       break;
-    } else if (!rc_input_.isTrajMode()) {
+    } else if (rc_traj_release_seen_ || !rc_input_.isTrajMode()) {
       //! [STATE] TRAJ => GUIDED by rc
       setFsmState(FsmState::STATE_GUIDED);
+      rc_input_.resetTrajModeTrigger();  // A queued low/high pair cannot re-enter next cycle.
       //! [TYPE] ANY => HOVER while switching from STATE TRAJ to GUIDED
       setReferenceType(ReferenceType::TYPE_HOVER);
       //! NOTE: use the previous reference state instead of robot_state
@@ -1274,6 +1314,12 @@ bool Fsm::prepareGuidedEntry() {
 }
 
 void Fsm::stopAutonomy() {
+  abortPerching("FCU/pilot ended autonomous control");
+  perching_recovery_at_ = -1.0;
+  last_powered_throttle_ = NAN;
+  last_powered_throttle_at_ = -1.0;
+  perching_rescue_until_ = -1.0;
+  perching_emergency_until_ = -1.0;
   mode_worker_->cancel();
   guided_entry_verified_ = false;
   takeoff_plan_.reset();
@@ -1285,6 +1331,23 @@ void Fsm::stopAutonomy() {
 }
 
 void Fsm::beginHandover(const std::string& reason) {
+  // During deliberate unloading, waiting for a mode RPC/Guided timeout with
+  // the old low/zero thrust is unsafe. Restore the last verified-flight output
+  // immediately, even when a sensor just expired; pilot/FCU mode changes above
+  // this path still win and never cause automatic re-arming.
+  if (perchingActive() && perching_status_.phase != flygripper_msgs::PerchingStatus::RETREAT &&
+      fc_state_.armed && fc_state_.mode == "GUIDED_NOGPS" &&
+      guided_entry_verified_ && robot_command_.rotor_mode == RobotCommandMode::MODE_ATTITUDE) {
+    // A stale /mavros/state must not leave our own zero-thrust command in force.
+    // Use only the already verified session and finite cached flight output;
+    // newly observed mode changes/disarming still take precedence above.
+    perching_emergency_until_ = steadySeconds() +
+        std::clamp(perching_config_.recovery_duration, 0.5, 2.0);
+    publishPerchingThrust(perching_status_.saved_throttle);
+    perching_rescue_until_ = steadySeconds() + perching_config_.recovery_duration;
+  }
+  abortPerching(reason);
+  perching_recovery_at_ = -1.0;
   last_handover_reason_ = reason;
   if (fsm_state_ == FsmState::STATE_HANDOVER) return;
   const bool was_waiting = fsm_state_ == FsmState::STATE_WAIT_GUIDED;
@@ -1303,7 +1366,7 @@ void Fsm::beginHandover(const std::string& reason) {
   setFsmState(FsmState::STATE_HANDOVER);
   mode_request_start_ = now_;
   last_mode_request_ = now_;
-  if (fcStateFresh() && fc_state_.armed &&
+  if ((fcStateFresh() || perching_emergency_until_ > steadySeconds()) && fc_state_.armed &&
       (fc_state_.mode == "GUIDED_NOGPS" || was_waiting)) {
     requestFcMode(fsm_param_->handover_mode);
   } else if (fcStateFresh()) {
@@ -1313,6 +1376,13 @@ void Fsm::beginHandover(const std::string& reason) {
 
 void Fsm::updateHandover() {
   if (!fcStateFresh()) {
+    // A verified perching session may request takeover while heartbeat feedback
+    // is missing. Bound retries to the same recovery window; never request GUIDED.
+    if (perching_emergency_until_ > steadySeconds() && fc_state_.armed &&
+        fc_state_.mode == "GUIDED_NOGPS" && now_ - last_mode_request_ >= 1.0) {
+      last_mode_request_ = now_;
+      requestFcMode(fsm_param_->handover_mode);
+    }
     ROS_ERROR_THROTTLE(1.0, "FCU state unavailable during takeover; waiting for FCU failsafe/pilot.");
     return;
   }

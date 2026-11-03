@@ -11,6 +11,7 @@
     <depend>geometry_msgs</depend>
     <depend>visualization_msgs</depend>
     <depend>flygripper_common</depend>
+    <test_depend>rostest</test_depend>
     <export>
         <!--  Other tools can request additional information be placed here  -->
     </export>

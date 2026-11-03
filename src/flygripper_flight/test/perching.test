@@ -1,0 +1,4 @@
+<launch>
+  <test test-name="perching_contract" pkg="flygripper_flight"
+        type="test_perching.py" time-limit="150"/>
+</launch>

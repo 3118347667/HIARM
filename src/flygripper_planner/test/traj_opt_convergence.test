@@ -1,0 +1,4 @@
+<launch>
+  <test test-name="traj_opt_convergence" pkg="flygripper_planner"
+        type="test_traj_opt_convergence" time-limit="45"/>
+</launch>

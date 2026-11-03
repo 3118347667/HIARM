@@ -13,6 +13,9 @@
 #include "flygripper_common/type/actuator_state.hpp"
 
 #include "flygripper_msgs/ActuatorCommand.h" // not type for convenient
+#include "flygripper_msgs/PerchingCommand.h"
+#include "flygripper_msgs/PerchingStatus.h"
+#include "flygripper_msgs/FlightTrajectoryStatus.h"
 
 #include "flygripper_planner/minco.hpp"
 #include "flygripper_planner/visualizer.hpp"
@@ -215,8 +218,9 @@ class TaskScheduler{
                                                                  &TaskScheduler::rvizTriggerCallback, this,
                                                                  ros::TransportHints().tcpNoDelay());
 
-    // rc in
-    rc_in_sub_ = nh.subscribe("/mavros/rc/in", 1, &TaskScheduler::rcInCallback, this,
+    pnh.param("perching/enabled", perching_enabled_, false);
+    // Keep brief exit edges for the perching approach guard.
+    rc_in_sub_ = nh.subscribe("/mavros/rc/in", perching_enabled_ ? 100 : 1, &TaskScheduler::rcInCallback, this,
                               ros::TransportHints().tcpNoDelay());
 
     // traj
@@ -227,6 +231,31 @@ class TaskScheduler{
     actuator_sub_ = nh.subscribe<flygripper_msgs::ActuatorState>("actuator_state", 10,
                                                                  &TaskScheduler::actuatorStateCallback, this,
                                                                  ros::TransportHints().tcpNoDelay());
+    if (perching_enabled_) {
+      perching_pub_ = nh.advertise<flygripper_msgs::PerchingCommand>("perching_command", 10);
+      perching_sub_ = nh.subscribe("perching_status", 10, &TaskScheduler::perchingStatusCallback,
+                                  this, ros::TransportHints().tcpNoDelay());
+      flight_status_sub_ = nh.subscribe("flight_trajectory_status", 20,
+          &TaskScheduler::flightStatusCallback, this, ros::TransportHints().tcpNoDelay());
+      pnh.param("perching/motors_off_duration", perching_command_.motors_off_duration, 5.0);
+      pnh.param("perching/spinup_duration", perching_command_.spinup_duration, 1.0);
+      pnh.param("perching/recovery_duration", perching_command_.recovery_duration, 2.0);
+      pnh.param("perching/retreat_distance", perching_command_.retreat_distance, 0.3);
+      pnh.param("perching/retreat_duration", perching_command_.retreat_duration, 2.0);
+      pnh.param("perching/settle_duration", perching_command_.settle_duration, 0.3);
+      pnh.param("perching/max_settle_speed", perching_command_.max_settle_speed, 0.1);
+      pnh.param("perching/position_tolerance", perching_command_.position_tolerance, 0.03);
+      pnh.param("perching/timeout", perching_command_.timeout, 20.0);
+      pnh.param("perching/gripper_open_duration", perching_command_.gripper_open_duration, 1.0);
+      pnh.param("perching/unload_duration", perching_command_.unload_duration, 3.0);
+      pnh.param("perching/support_verify_duration", perching_command_.support_verify_duration, 1.0);
+      pnh.param("perching/final_unload_duration", perching_command_.final_unload_duration, 1.0);
+      pnh.param("perching/test_throttle_ratio", perching_command_.test_throttle_ratio, 0.15);
+      pnh.param("perching/max_height_drop", perching_command_.max_height_drop, 0.02);
+      pnh.param("perching/max_downward_speed", perching_command_.max_downward_speed, 0.08);
+      pnh.param("perching/min_vertical_acceleration", perching_command_.min_vertical_acceleration, -1.5);
+      pnh.param("perching/sensor_max_age", perching_command_.sensor_max_age, 0.08);
+    }
 
     if (!getParam("morph_shrink_pos", morph_shrink_pos_) ||
         !getParam("morph_expand_pos", morph_expand_pos_) ||
@@ -236,6 +265,18 @@ class TaskScheduler{
       throw ros::Exception("Failed to load parameters");
     }
     getParamDefault("morph_use_feedback", morph_use_feedback_, true, pnh);
+    if (perching_enabled_) {
+      if (stage_data_.size() < 2 ||
+          stage_data_.back().morph_action != MorphingAction::SHRINKING ||
+          stage_data_.back().morph_trigger != MorphingTrigger::GOAL) {
+        throw ros::Exception("Perching requires a final shrinking stage triggered after reaching the goal");
+      }
+      perching_command_.closed_position = morph_shrink_pos_;
+      perching_command_.use_actuator_feedback = morph_use_feedback_;
+      perching_command_.open_position = morph_expand_pos_;
+      perching_command_.closed_tolerance = stage_data_.back().morph_tolerance;
+      pnh.param("perching/open_tolerance", perching_command_.open_tolerance, 0.1);
+    }
     if (!morph_use_feedback_ &&
         (!std::isfinite(morph_duration_) || morph_duration_ < 0.0)) {
       throw ros::Exception("morph_duration must be finite and non-negative");
@@ -378,6 +419,12 @@ class TaskScheduler{
 
   void run(){
     Scalar now = ros::Time::now().toSec();
+    // Once START is sent the flight FSM owns motor output, opening and retreat.
+    if (perching_executing_) {
+      updatePerchingMission();
+      return;
+    }
+    if (perching_approach_ && !checkPerchingApproach()) return;
     //! Feedback is required only when configured as the completion criterion.
     if (odom_.valid() && odom_.isReceived(now) &&
         rc_input_.valid() && rc_input_.isReceived(now) &&
@@ -390,6 +437,10 @@ class TaskScheduler{
       if (plan_status_ == PlanStatus::IDLE &&
           morphing_status_ == MorphingStatus::IDLE &&
           trigger_){
+        // Capture the hover throttle before the final grasp approach. Wait for
+        // a correlated acknowledgement before publishing that approach.
+        if (perching_enabled_ && stage_ == int(stage_data_.size()) - 1 &&
+            !preparePerchingMission()) return;
         ROS_INFO("\033[34m stage %d with velocity %.2f planning\033[34m",
                  stage_,
                  stage_data_[stage_].plan_max_vel);
@@ -401,6 +452,16 @@ class TaskScheduler{
           ROS_INFO("You can try again by giving trigger from RViz...");
           return;
         };
+        if (perching_enabled_ && stage_ == int(stage_data_.size()) - 1) {
+          const auto& trajectory = stage_data_[stage_].plan_traj;
+          perching_trajectory_id_ = static_cast<uint32_t>(trajectory.id);
+          perching_trajectory_start_ = ros::Time(trajectory.stamp);
+          perching_trajectory_end_ = trajectory.getEndTime();
+          perching_approach_started_ = std::chrono::steady_clock::now();
+          perching_approach_ = true;
+          perching_trajectory_seen_ = false;
+          perching_rc_exit_ = false;
+        }
         //! Morphing start with planning
         if (stage_data_[stage_].morph_trigger == MorphingTrigger::START &&
             morphing_status_ == MorphingStatus::IDLE){
@@ -422,7 +483,7 @@ class TaskScheduler{
       //! Plan executing
       if (plan_status_ == PlanStatus::EXECUTING) {
         //! plan completed checking
-        if (isPlanCompleted()){
+        if ((!perching_approach_ || perching_trajectory_seen_) && isPlanCompleted()){
           plan_status_ = PlanStatus::DONE;
           ROS_INFO("\033[32m stage %d plan completed\033[32m", stage_);
           //! Morphing after planning completed
@@ -471,6 +532,12 @@ class TaskScheduler{
           morphing_status_ == MorphingStatus::DONE) {
         ROS_INFO("\033[32m stage %d Completed \033[32m", stage_);
         if (stage_ == int(stage_data_.size())-1){
+          if (perching_enabled_) {
+            perching_executing_ = true;
+            perching_wait_started_ = std::chrono::steady_clock::now();
+            publishPerchingCommand(flygripper_msgs::PerchingCommand::START);
+            return;
+          }
           ROS_INFO("-------[END] All stage reached -------");
           resetFirstStage();
           ROS_INFO("You can try again by giving trigger from RViz...");
@@ -483,6 +550,12 @@ class TaskScheduler{
   }
 
   void resetFirstStage(){
+    if (perching_command_.mission_id != 0 && !perching_finished_)
+      publishPerchingCommand(flygripper_msgs::PerchingCommand::CANCEL);
+    perching_command_.mission_id = 0;
+    perching_preparing_ = perching_executing_ = perching_finished_ = false;
+    perching_approach_ = perching_trajectory_seen_ = perching_rc_exit_ = false;
+    perching_status_ = flygripper_msgs::PerchingStatus();
     stage_ = -1;
     morphing_status_ = MorphingStatus::IDLE;
     plan_status_ = PlanStatus::IDLE;
@@ -805,6 +878,10 @@ class TaskScheduler{
   {
     fromRosMsg(msg, rc_input_, true);
     rc_input_.update();
+    // Preserve a low/high pair processed in one spinOnce, including malformed RC.
+    if (perching_approach_ && (msg->channels.size() < CHANNEL_SIZE || !rc_input_.valid() ||
+        rc_input_.channels[TOGGLE_GUIDED] <= 0.75 || rc_input_.channels[TOGGLE_TRAJ] <= 0.75))
+      perching_rc_exit_ = true;
   }
 
   void publishMorphing(){
@@ -837,6 +914,109 @@ class TaskScheduler{
     fromRosMsg(msg,actuator_state_);
   }
 
+  void perchingStatusCallback(const flygripper_msgs::PerchingStatusConstPtr& msg) {
+    if (msg->mission_id == perching_command_.mission_id) {
+      perching_status_ = *msg;
+      perching_status_received_ = std::chrono::steady_clock::now();
+    }
+  }
+
+  void flightStatusCallback(const flygripper_msgs::FlightTrajectoryStatusConstPtr& msg) {
+    flight_status_ = *msg;
+    flight_status_received_ = std::chrono::steady_clock::now();
+    if (perching_approach_ && msg->trajectory_active &&
+        msg->trajectory_id == perching_trajectory_id_ &&
+        msg->trajectory_start == perching_trajectory_start_)
+      perching_trajectory_seen_ = true;
+  }
+
+  bool checkPerchingApproach() {
+    using Status = flygripper_msgs::FlightTrajectoryStatus;
+    const auto steady_now = std::chrono::steady_clock::now();
+    const double now = ros::Time::now().toSec();
+    const auto fresh = [&](const ros::Time& stamp, const std::chrono::steady_clock::time_point& received) {
+      const double age = now - stamp.toSec();
+      return !stamp.isZero() && age >= -0.05 && age <= 0.5 &&
+          std::chrono::duration<double>(steady_now - received).count() <= 0.5;
+    };
+    const bool prepared = perching_status_.mission_id == perching_command_.mission_id &&
+        perching_status_.phase == flygripper_msgs::PerchingStatus::PREPARED &&
+        fresh(perching_status_.header.stamp, perching_status_received_);
+    const bool flight_ok = fresh(flight_status_.header.stamp, flight_status_received_) &&
+        flight_status_.fsm_state == Status::FSM_TRAJ && flight_status_.fcu_state_fresh &&
+        flight_status_.fcu_armed && flight_status_.fcu_guided_nogps;
+    const bool rc_ok = !perching_rc_exit_ && rc_input_.valid() && rc_input_.isReceived(now);
+    const bool matching = flight_status_.trajectory_id == perching_trajectory_id_ &&
+        flight_status_.trajectory_start == perching_trajectory_start_;
+    const bool finished_hover = now >= perching_trajectory_end_ && matching &&
+        !flight_status_.trajectory_active && flight_status_.reference_type == Status::REF_HOVER;
+    const bool executing = matching && flight_status_.trajectory_active;
+    const double elapsed = std::chrono::duration<double>(steady_now - perching_approach_started_).count();
+    if (!prepared || !flight_ok || !rc_ok ||
+        (perching_trajectory_seen_ && !executing && !finished_hover) ||
+        (!perching_trajectory_seen_ && (elapsed > 1.0 || now > perching_trajectory_end_))) {
+      ROS_ERROR("Perching approach cancelled: prepared=%d flight=%d rc=%d trajectory_seen=%d executing=%d finished_hover=%d",
+                prepared, flight_ok, rc_ok, perching_trajectory_seen_, executing, finished_hover);
+      resetFirstStage();
+      return false;
+    }
+    return true;
+  }
+
+  void publishPerchingCommand(uint8_t command) {
+    if (!perching_enabled_ || perching_command_.mission_id == 0) return;
+    perching_command_.header.stamp = ros::Time::now();
+    perching_command_.command = command;
+    perching_pub_.publish(perching_command_);
+    perching_last_command_ = std::chrono::steady_clock::now();
+  }
+
+  bool preparePerchingMission() {
+    using Status = flygripper_msgs::PerchingStatus;
+    if (!perching_preparing_) {
+      perching_preparing_ = true;
+      perching_command_.mission_id = ros::WallTime::now().toNSec();
+      perching_wait_started_ = std::chrono::steady_clock::now();
+      publishPerchingCommand(flygripper_msgs::PerchingCommand::PREPARE);
+    }
+    const double age = ros::Time::now().toSec() - perching_status_.header.stamp.toSec();
+    if (age >= 0.0 && age < 0.5 && perching_status_.phase == Status::PREPARED) return true;
+    const double wait = std::chrono::duration<double>(std::chrono::steady_clock::now() -
+                                                     perching_wait_started_).count();
+    if (perching_status_.phase == Status::ABORTED || wait > 5.0) {
+      ROS_ERROR("Perching prepare failed: %s", perching_status_.detail.c_str());
+      resetFirstStage();
+      return false;
+    }
+    if (std::chrono::duration<double>(std::chrono::steady_clock::now() -
+                                     perching_last_command_).count() > 0.1)
+      publishPerchingCommand(flygripper_msgs::PerchingCommand::PREPARE);
+    return false;
+  }
+
+  void updatePerchingMission() {
+    using Status = flygripper_msgs::PerchingStatus;
+    const double age = ros::Time::now().toSec() - perching_status_.header.stamp.toSec();
+    if (age >= 0.0 && age < 0.5 && perching_status_.phase == Status::COMPLETE) {
+      ROS_INFO("Perching/reflight completed: %s", perching_status_.detail.c_str());
+      perching_finished_ = true;
+      resetFirstStage();
+      return;
+    }
+    const double wait = std::chrono::duration<double>(std::chrono::steady_clock::now() -
+                                                     perching_wait_started_).count();
+    if (perching_status_.phase == Status::ABORTED || age > 1.0 || age < -0.05 ||
+        wait > perching_command_.timeout + 2.0) {
+      ROS_ERROR("Perching/reflight stopped: %s", perching_status_.detail.c_str());
+      resetFirstStage();
+      return;
+    }
+    if (perching_status_.phase == Status::PREPARED &&
+        std::chrono::duration<double>(std::chrono::steady_clock::now() -
+                                     perching_last_command_).count() > 0.1)
+      publishPerchingCommand(flygripper_msgs::PerchingCommand::START);
+  }
+
  private:
   ros::Publisher traj_pub_;
   ros::Publisher actuator_pub_;
@@ -844,6 +1024,20 @@ class TaskScheduler{
   ros::Subscriber rviz_trigger_sub_;
   ros::Subscriber odom_sub_;
   ros::Subscriber rc_in_sub_;
+  ros::Publisher perching_pub_;
+  ros::Subscriber perching_sub_;
+  ros::Subscriber flight_status_sub_;
+  bool perching_enabled_{false}, perching_preparing_{false},
+      perching_executing_{false}, perching_finished_{false};
+  flygripper_msgs::PerchingCommand perching_command_;
+  flygripper_msgs::PerchingStatus perching_status_;
+  flygripper_msgs::FlightTrajectoryStatus flight_status_;
+  bool perching_approach_{false}, perching_trajectory_seen_{false}, perching_rc_exit_{false};
+  uint32_t perching_trajectory_id_{0};
+  ros::Time perching_trajectory_start_;
+  double perching_trajectory_end_{0.0};
+  std::chrono::steady_clock::time_point perching_approach_started_{}, perching_status_received_{}, flight_status_received_{};
+  std::chrono::steady_clock::time_point perching_wait_started_{}, perching_last_command_{};
 
   Visualizer visualizer_;
   RcInput rc_input_;

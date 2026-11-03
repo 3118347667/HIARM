@@ -1,0 +1,82 @@
+arc_angle: 1.0
+arc_radius: 0.5
+arc_point_num: 5
+
+K: 8
+rhoT: 10.0
+rhoV: 1000.0
+rhoA: 1000.0
+rhoDYaw: 1000.0
+max_iteration: 300
+pause_debug: false
+M: 8
+rhoPAlignmentDistance: 1.5
+rhoPAlignmentAngle: 1000.0
+rhoYawAlignmentAngle: 1000.0
+min_piece_num: 2
+fix_p: true
+magic_number: 0
+
+# Starting values from real_grasp_bottle.yaml; verify against the mechanism.
+morph_shrink_pos: -12.0
+morph_expand_pos: 0.0
+morph_duration: 0.9 # seconds to wait after each open/close command
+morph_use_feedback: false # timed completion does not confirm physical motion
+use_odom_init_vel: false
+task_num: 4
+
+task_0: # Align and expand
+  plan_type: 0
+  plan_point_num: 1
+  plan_point_0: {x: -2.4646, y: -0.8616, z: 0.607, yaw: 0.0}
+  plan_terminal_vel: {x: 0.0, y: 0.0, z: 0.0}
+  plan_max_vel: 0.5
+  plan_max_acc: 0.5
+  plan_max_dyaw: 0.5
+  plan_tolerance: 0.05
+  morph_action: 1
+  morph_trigger: 0
+  morph_auto: true
+  morph_tolerance: 0.1
+
+task_1: # Reach the point before the gap, then close
+  plan_type: 0
+  plan_point_num: 1
+  plan_point_0: {x: -0.85, y: -0.66, z: 0.72}
+  plan_terminal_vel: {x: 0.0, y: 0.0, z: 0.0}
+  plan_max_vel: 0.5
+  plan_max_acc: 0.5
+  plan_max_dyaw: 0.5
+  plan_tolerance: 0.05
+  morph_action: 2
+  morph_trigger: 1
+  morph_auto: false
+  morph_tolerance: 0.1
+
+task_2: # Pass the gap; open after reaching the point beyond it
+  plan_type: 0
+  plan_point_num: 1
+  plan_point_0: {x: 0.12, y: -0.66, z: 0.72}
+  plan_terminal_vel: {x: 0.0, y: 0.0, z: 0.0}
+  plan_max_vel: 0.5
+  plan_max_acc: 0.5
+  plan_max_dyaw: 0.5
+  plan_tolerance: 0.05
+  morph_action: 1
+  morph_trigger: 1
+  morph_auto: false
+  morph_tolerance: 0.1
+
+task_3: # Fly to the final point with the gripper already open
+  plan_type: 0
+  plan_point_num: 1
+  plan_point_0: {x: 1.12, y: -0.66, z: 0.72}
+  plan_terminal_vel: {x: 0.0, y: 0.0, z: 0.0}
+  plan_max_vel: 0.5
+  plan_max_acc: 0.5
+  plan_max_dyaw: 0.5
+  plan_tolerance: 0.05
+  morph_action: 0
+  morph_trigger: 0
+  morph_auto: true
+  morph_tolerance: 0.1

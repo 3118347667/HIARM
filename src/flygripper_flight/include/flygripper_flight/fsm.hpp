@@ -29,6 +29,8 @@
 #include "flygripper_flight/thrust_acc_map.hpp"
 #include "flygripper_msgs/GraspState.h"
 #include "flygripper_msgs/FlightTrajectoryStatus.h"
+#include "flygripper_msgs/PerchingCommand.h"
+#include "flygripper_msgs/PerchingStatus.h"
 
 namespace flygripper_flight {
 using namespace flygripper_common;
@@ -61,6 +63,7 @@ class Fsm {
   void rosExtendedStateCallback(const ros::MessageEvent<const mavros_msgs::ExtendedState>& event);
 
   void rosTrajCallback(const ros::MessageEvent<const flygripper_msgs::PolynomialTrajectory>& event);
+  void rosPerchingCallback(const ros::MessageEvent<const flygripper_msgs::PerchingCommand>& event);
 
   void controlLoop(const ros::TimerEvent& event);
 
@@ -69,6 +72,34 @@ class Fsm {
   void consumeInputs();
   void publishRuntimeDiagnostics();
   void publishFlightTrajectoryStatus();
+  void consumePerchingCommand();
+  bool updatePerching();
+  bool perchingActive() const;
+  void abortPerching(const std::string& reason);
+  void publishPerchingStatus();
+  void publishPerchingThrust(double throttle);
+  double perchingRecoveryThrottle(double computed) const;
+  bool perchingActuatorFresh() const;
+  void clearPerchingTrajectory();
+  void rejectPerchingSupport(const std::string& reason);
+  bool publishPerchingEmergencyRecovery();
+  InputBuffer<flygripper_msgs::PerchingCommand> perching_input_;
+  uint64_t perching_input_count_{0}, perching_last_mission_{0};
+  uint64_t perching_last_status_mission_{0};
+  uint8_t perching_last_status_phase_{255};
+  flygripper_msgs::PerchingCommand perching_config_;
+  flygripper_msgs::PerchingStatus perching_status_;
+  double perching_prepared_at_{0.0}, perching_started_at_{0.0},
+      perching_phase_at_{0.0}, perching_settled_at_{-1.0},
+      perching_last_status_{-1.0}, perching_recovery_at_{-1.0};
+  bool perching_start_requested_{false};
+  Vector<3> perching_position_{Vector<3>::Zero()}, perching_retreat_start_{Vector<3>::Zero()};
+  double perching_yaw_{0.0}, perching_fcu_yaw_{0.0};
+  double last_powered_throttle_{NAN}, last_powered_throttle_at_{-1.0};
+  double perching_rescue_until_{-1.0};
+  // A short, cached positive-thrust bridge when FCU state/sensors expire during
+  // deliberate unloading. This is never authorization for renewed autonomy.
+  double perching_emergency_until_{-1.0};
   struct Inputs {
     InputSample<sensor_msgs::Imu> imu;
     InputSample<nav_msgs::Odometry> odom;
@@ -90,7 +121,8 @@ class Fsm {
   InputBuffer<flygripper_msgs::ActuatorState> actuator_input_;
   InputBuffer<flygripper_msgs::PolynomialTrajectory> trajectory_input_;
   Inputs applied_;  // Only the control thread owns decoded state and this snapshot.
-  bool rc_release_seen_{false}, rc_snapshot_overflow_{false};
+  bool rc_release_seen_{false}, rc_traj_release_seen_{false}, rc_snapshot_overflow_{false},
+      rc_invalid_seen_{false};
   double input_lock_copy_duration_{0.0}, input_decode_duration_{0.0};
   uint64_t input_snapshot_misses_{0};
   double loop_started_{0.0}, last_loop_started_{0.0};
@@ -201,13 +233,13 @@ class Fsm {
   ros::Duration dt_;
   ros::SubscribeOptions rc_options_, fc_state_options_, battery_options_,
       odom_options_, imu_options_, actuator_state_options_,
-      rotor_speed_options_, traj_options_, extended_state_options_;
+      rotor_speed_options_, traj_options_, extended_state_options_, perching_options_;
   ros::Subscriber rc_sub_, fc_state_sub_, battery_sub_, odom_sub_, imu_sub_,
-      actuator_state_sub_, rotor_speed_sub_, traj_sub_, extended_state_sub_;
+      actuator_state_sub_, rotor_speed_sub_, traj_sub_, extended_state_sub_, perching_sub_;
   ros::Publisher rotor_command_pub_, thrust_att_command_pub_,
       actuator_command_pub_, traj_trigger_pub_, ctrl_state_pub_, reference_pub_,
       robot_state_pub_, ext_indi_pub_, ext_l1_pub_, ext_tact_pub_,
-      interactive_wrench_pub_, runtime_diagnostic_pub_, flight_trajectory_status_pub_;
+      interactive_wrench_pub_, runtime_diagnostic_pub_, flight_trajectory_status_pub_, perching_status_pub_;
   ros::ServiceClient mavros_setmode_srv_, mavros_getparam_srv_;
 
   //  flygripper_msgs::RotorCommand rotor_command_msg_;
