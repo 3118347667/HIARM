@@ -24,7 +24,7 @@ SITL SERIAL0/5760 连接 MAVROS，SERIAL1/5762 提供辅助 GCS 心跳。
 采用 ArduPilot 内置四旋翼动力学模型，不模拟 HIARM 的变形机构。
 该模型默认质量 3 kg、参考悬停输出 0.39，与真机配置不同，因此仅在
 测试进程的 ROS 参数中把 `hover_percentage` 设为 0.39。
-`params/hiarm.params` 和真机 YAML 不被覆盖。
+`params/hiarm1.params` 和真机 YAML 不被覆盖。
 SITL 从官方机型默认参数启动，叠加 GUID_OPTIONS=9、GUID_TIMEOUT=3、
 16 个 RC 通道和 MAVLink 2 等测试配置。飞行模式通道设为 CH8，
 以便本项目使用 CH5 触发自动起飞，不让 APM 的模式开关同时占用 CH5。

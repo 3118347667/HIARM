@@ -183,7 +183,7 @@
 
 | 文件 | 作用概况 |
 |---|---|
-| [`params/hiarm.params`](../params/hiarm.params) | ArduPilot 五列飞控参数导出文件；用于核对或导入 |
+| [`params/hiarm1.params`](../params/hiarm1.params) | 第 1 架飞机的 ArduPilot 五列飞控参数导出文件；用于核对或导入 |
 
 ## src/.rosinstall（1 个）
 

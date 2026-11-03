@@ -25,7 +25,9 @@ ssh_options=(
   -o ServerAliveInterval=15
   -o ServerAliveCountMax=4
 )
-rsync_ssh="ssh -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=4"
+# SSH LocalCommand output would corrupt rsync's protocol stream. The initial
+# SSH preflight still runs any configured local command, such as board time sync.
+rsync_ssh="ssh -o PermitLocalCommand=no -o BatchMode=yes -o ConnectTimeout=15 -o ServerAliveInterval=15 -o ServerAliveCountMax=4"
 
 retry() {
   local attempt

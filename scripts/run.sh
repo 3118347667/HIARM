@@ -6,7 +6,7 @@ MAV_NAME="flygripper" #"robot"
 USE_SIM="false"       #"false"
 GUI="false"
 MOCAP_IP="10.1.1.198"
-QGC_IP="${QGC_IP:-10.1.1.91}"
+QGC_IP="${QGC_IP:-10.1.1.92}"
 QGC_PORT="${QGC_PORT:-14550}"
 RUN_MODE="${1:-}"
 

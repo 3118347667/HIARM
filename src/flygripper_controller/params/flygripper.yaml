@@ -56,6 +56,6 @@ geometric_controller: # hover version
 
   As_v: -3.0
   As_omega: -10.0
-  thrust_flt1_cutoff_freq: 4.0
+  thrust_flt1_cutoff_freq: 3.0
   torque_flt1_cutoff_freq: 5.0
   torque_flt2_cutoff_freq: 15.0

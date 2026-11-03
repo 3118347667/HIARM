@@ -14,7 +14,7 @@ import time
 import uuid
 
 
-DEFAULT_OUTPUT = Path(__file__).resolve().parent.parent / "params" / "hiarm.params"
+DEFAULT_OUTPUT = Path(__file__).resolve().parent.parent / "params" / "hiarm1.params"
 INTEGER_TYPES = {2, 4, 6}
 SUPPORTED_TYPES = INTEGER_TYPES | {9}
 
@@ -211,7 +211,7 @@ def save_complete_snapshot(output, parameters, system, component):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="从 ArduPilot 读取完整参数并保存为 params/hiarm.params")
+    parser = argparse.ArgumentParser(description="从 ArduPilot 读取完整参数并保存为 params/hiarm1.params")
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT, help="输出 .params 路径")
     parser.add_argument("--device", default="/dev/ttyACM0", help="飞控串口，默认 /dev/ttyACM0")
     parser.add_argument("--baud", type=int, default=57600, help="串口波特率，默认 57600")

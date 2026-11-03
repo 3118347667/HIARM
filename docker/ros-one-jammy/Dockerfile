@@ -2,14 +2,15 @@ FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN sed -i 's|http://ports.ubuntu.com/ubuntu-ports|http://mirrors.tuna.tsinghua.edu.cn/ubuntu-ports|g' /etc/apt/sources.list \
+    && printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' \
+       > /etc/apt/apt.conf.d/80-retries \
+    && apt-get update && apt-get install -y --no-install-recommends \
     ca-certificates curl build-essential cmake git lsb-release rsync file \
+    && sed -i 's|http://mirrors.tuna.tsinghua.edu.cn|https://mirrors.tuna.tsinghua.edu.cn|g' /etc/apt/sources.list \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
 RUN install -d /etc/apt/keyrings /etc/ros/rosdep/sources.list.d \
-    && sed -i 's|http://ports.ubuntu.com|https://ports.ubuntu.com|g' /etc/apt/sources.list \
-    && printf 'Acquire::Retries "5";\nAcquire::http::Timeout "30";\nAcquire::https::Timeout "30";\n' \
-       > /etc/apt/apt.conf.d/80-retries \
     && curl -fsSL https://ros.packages.techfak.net/gpg.key \
        -o /etc/apt/keyrings/ros-one-keyring.gpg \
     && echo "deb [arch=arm64 signed-by=/etc/apt/keyrings/ros-one-keyring.gpg] https://ros.packages.techfak.net jammy main" \

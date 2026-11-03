@@ -14,7 +14,7 @@ import sys
 import time
 
 
-DEFAULT_FILE = Path(__file__).resolve().parent.parent / "params" / "hiarm.params"
+DEFAULT_FILE = Path(__file__).resolve().parent.parent / "params" / "hiarm1.params"
 SKIP_NAMES = {
     "ARSPD_OFFSET", "CMD_INDEX", "CMD_TOTAL", "FENCE_TOTAL",
     "FORMAT_VERSION", "GND_ABS_PRESS", "GND_TEMP", "LOG_LASTFILE",
@@ -170,7 +170,7 @@ def write_backup(path, changed, current):
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     backup = backup_dir / f"before-hiarm-{stamp}-{time.time_ns() % 1000000:06d}.params"
     with backup.open("x", encoding="ascii") as output:
-        output.write("# Parameters before applying hiarm.params; UTC backup\n")
+        output.write("# Parameters before applying the selected parameter file; UTC backup\n")
         output.write("# Vehicle-Id Component-Id Name Value Type\n")
         for item in changed:
             previous = current[item.name]
@@ -182,7 +182,7 @@ def write_backup(path, changed, current):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="把 params/hiarm.params 的差异写入已上锁的 ArduPilot")
+    parser = argparse.ArgumentParser(description="把 params/hiarm1.params 的差异写入已上锁的 ArduPilot")
     parser.add_argument("--file", type=Path, default=DEFAULT_FILE, help="五列 .params 文件")
     parser.add_argument("--device", default="/dev/ttyACM0", help="飞控串口，默认 /dev/ttyACM0")
     parser.add_argument("--baud", type=int, default=57600, help="串口波特率，默认 57600")

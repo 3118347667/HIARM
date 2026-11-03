@@ -3,7 +3,7 @@
 真机 `fsm.yaml` 默认启用自动起飞，使用 `command_mode: 0`、
 `GUIDED_NOGPS` 和 `/mavros/setpoint_raw/attitude`。
 高度闭环由本项目的位置控制器完成，飞控接收姿态和 0～1 推力。
-`params/hiarm.params` 中的 `GUID_OPTIONS=9` 包含 bit 3；节点进入控制前
+`params/hiarm1.params` 中的 `GUID_OPTIONS=9` 包含 bit 3；节点进入控制前
 还会通过 `/mavros/param/get` 核对飞控实际值的该位。
 
 ## 操作
